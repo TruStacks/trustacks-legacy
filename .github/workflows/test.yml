@@ -1,0 +1,43 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  unit_test:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    name: Unit Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      - name: "Setup Go"
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      
+      - name: Run Unit Test
+        run: |
+          go test -v ./...
+  
+  lint:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      - name: "Setup Go"
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+          
+      - name: Run Lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          args: --timeout=3m

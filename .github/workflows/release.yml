@@ -1,0 +1,73 @@
+name: Release
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  bump-version:
+    name: Bump the version and create the changelog with commitizen
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v3
+
+    - name: Create bump and changelog
+      uses: commitizen-tools/commitizen-action@master
+      with:
+        github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
+    outputs:
+      version: ${{ env.REVISION }}
+
+  create-release:
+    name: Create release
+    runs-on: ubuntu-latest
+    needs: [bump-version]
+    steps:
+    - name: Checkout out the repo
+      uses: actions/checkout@v2
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  
+      with:
+        tag_name: ${{needs.bump-version.outputs.version}}
+        release_name: TruStacks ${{needs.bump-version.outputs.version}}
+        draft: false
+        prerelease: false
+
+  release-linux-amd64:
+    name: Release linux/amd64
+    runs-on: ubuntu-latest
+    needs: [bump-version, create-release]
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v3
+
+    - uses: wangyoucao577/go-release-action@v1.30
+      with:
+        github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  
+        goos: linux
+        goarch: amd64
+        binary_name: tsctl
+        release_tag: ${{needs.bump-version.outputs.version}}
+        project_path: ./cmd
+  
+  release-darwin-amd64:
+    name: Release darwin/amd64
+    runs-on: ubuntu-latest
+    needs: [bump-version, create-release]
+    steps:
+    - name: Check out the repo
+      uses: actions/checkout@v3
+      
+    - uses: wangyoucao577/go-release-action@v1.30
+      with:
+        github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}  
+        goos: darwin
+        goarch: amd64
+        binary_name: tsctl
+        release_tag: ${{needs.bump-version.outputs.version}}
+        project_path: ./cmd

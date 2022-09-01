@@ -1,0 +1,6 @@
+tsctl
+
+# Docs files and folders
+/docs/node_modules
+/docs/build/
+/docs/.docusaurus/

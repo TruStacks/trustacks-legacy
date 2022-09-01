@@ -1,0 +1,11 @@
+kubernetes:
+  host: https://kubernetes.default
+
+helloworld:
+  namespace: default
+  image:
+    name: tutum/hello-world
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    ingressClass: internal-ingress

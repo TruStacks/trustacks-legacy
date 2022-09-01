@@ -1,0 +1,149 @@
+---
+sidebar_position: 3
+slug: /toolchains/components
+---
+
+import useBaseUrl from '@docusaurus/useBaseUrl';
+import ThemedImage from '@theme/ThemedImage';
+
+# Components
+
+Components are the software tools that are deployed in the toolchain that enable software delivery.
+
+## Types of Components
+
+Toolchains contain two types of Components.
+
+- Core Components 
+- Supplemental Components
+
+### Core Components
+
+Every toolchain includes core components that provide the following capabilities:
+
+- Single Sign-On (SSO)
+- CI/CD
+
+#### Single Sign-On
+
+SSO provides seamless access to toolchain components.
+
+All components that allow authenticated access from a user interface must support the [OpenID Connect](https://openid.net/connect/) (OIDC) protocol.
+
+The **SSO component** is installed in the toolchain to issue OIDC client ids and secrets to peer components.
+
+:::info saml support
+
+SAML is not currently supported, but it may be added in the future.
+
+:::
+
+#### CI/CD Execution
+
+Continous integration and deployment is the primary function of the toolchain and its related components.
+
+The **CI/CD** component is installed in the toolchain to orchestrate the deployment of pipeline resources and excuction of CI/CD tasks.
+
+### Supplemental Components
+
+In addition to the core components, supplemental components provide extended capabilities for CI/CD tasks such as:
+
+- code quality scanning
+- gitops deployments
+- regulatory compliance reporting
+
+## Orchestration
+
+Components in the TruStacks eco-system must be orchestrated for consumption without human intervention.
+
+TruStacks orchestration works as follows:
+
+<ThemedImage
+  alt="orchestration diagram"
+  sources={{
+    light: useBaseUrl('/img/orchestration-white.png'),
+    dark: useBaseUrl('/img/orchestration-dark.png'),
+  }}
+/>
+
+
+### Helm
+
+[Helm](https://helm.sh/) is used to deploy toolchain components.
+
+All toolchain components originate from a base helm chart deployment. [Helm hooks](https://helm.sh/docs/topics/charts_hooks/) are used to automatically provision components.
+
+:::info what about operators?
+
+Currently, helm has the best adoption. Operators may be supported in the future.
+
+:::
+
+#### Values Templates
+
+Component helm chart values are generated using values file templates.
+
+The following is a sample `values` template from a [component configuration](https://github.com/TruStacks/catalog/blob/main/pkg/components/authentik/config.yaml). 
+
+```yaml
+{{- $postgresqlPassword := randAlphaNum 32 -}}
+authentik:
+  secret_key: {{ randAlphaNum 32 }}
+  postgresql:
+    host: authentik-postgresql
+    password: {{ $postgresqlPassword }}
+ingress:
+  enabled: true
+  hosts:
+  - host: authentik.{{ .domain }}
+  paths:
+  - path: "/"
+    pathType: "Prefix"
+postgresql:
+  enabled: true
+  postgresqlPassword: {{ $postgresqlPassword }}
+  fullnameOverride: authentik-postgresql
+redis:
+  enabled: true
+envValueFrom:
+  AUTHENTIK_BOOTSTRAP_TOKEN:
+    secretKeyRef:
+      name: authentik-bootstrap
+      key: api-token
+```
+
+The values template uses the same [sprig](http://masterminds.github.io/sprig/) template functions as helm.
+
+The above example requires the `domain` parameter to be defined in order to render the template. The parameters are set in the toolchain configuration and passed to the values template during the [toolchain installation](/tutorial/install-toolchain#configuration).
+
+:::tip 
+
+The parameters that can be consumed by values templates are defined in the [catalog config](https://github.com/TruStacks/catalog/blob/main/pkg/catalog/catalog.yaml) referenced in the toolchain dependencies.
+
+:::
+
+:::tip
+
+Catalogs are covered in greater detail [here](/toolchains/catalogs)
+
+:::
+
+### Hooks
+
+TruStacks components perform provisioning tasks during different phases of the helm installation process.
+
+The tasks executed in the hook are provided by the catalog container image running in [`hook mode`](https://github.com/TruStacks/catalog#hook). The component hooks are fully self-contained without any intervention or extra logic provided by the toolchain or engine. 
+
+**pre-install**:
+- create oidc clients and secrets
+- create secrets needed by the component before release
+
+**post-install**:
+- configure service accounts, user groups and rbac roles
+- create system inputs
+
+:::info
+
+This list is not comprehensive. There are an unlimited number of tasks that can be preferred in hooks.
+
+:::
