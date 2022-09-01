@@ -5,17 +5,19 @@ on:
 
 jobs:
   bump-version:
+    if: "!startsWith(github.event.head_commit.message, 'bump:')"
     name: Bump the version and create the changelog with commitizen
     runs-on: ubuntu-latest
     steps:
-    - name: Check out the repo
+    - name: Check out the rpoe
       uses: actions/checkout@v3
-
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
     - name: Create bump and changelog
       uses: commitizen-tools/commitizen-action@master
       with:
         github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
-
     outputs:
       version: ${{ env.REVISION }}
 
