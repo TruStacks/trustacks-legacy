@@ -8,7 +8,7 @@ on:
 
 jobs:
   unit_test:
-    if: "startsWith(github.event.head_commit.message, 'feat') || startsWith(github.event.head_commit.message, 'fix')"
+    if: "!startsWith(github.event.head_commit.message, 'docs')"
     name: Unit Test
     runs-on: ubuntu-latest
     steps:
@@ -24,7 +24,7 @@ jobs:
         run: go test ./... -v -race
 
   firebase_test:
-    if: "startsWith(github.event.head_commit.message, 'feat') || startsWith(github.event.head_commit.message, 'fix')"
+    if: "!startsWith(github.event.head_commit.message, 'docs')"
     name: Firebase Test
     runs-on: ubuntu-latest
     steps:
@@ -38,7 +38,7 @@ jobs:
           args: emulators:exec --only firestore --project fake-project-id 'go test ./... -v -race -tags=test_firebase'
 
   lint:
-    if: "startsWith(github.event.head_commit.message, 'feat') || startsWith(github.event.head_commit.message, 'fix')"
+    if: "!startsWith(github.event.head_commit.message, 'docs')"
     name: Lint
     runs-on: ubuntu-latest
     steps:
