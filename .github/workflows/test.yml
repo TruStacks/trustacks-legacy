@@ -33,10 +33,10 @@ jobs:
         with: 
           distribution: 'zulu'
           java-version: "11"
+      - name: Setup firebase tools
+        run: curl -sL firebase.tools | bash
       - name: Run firebase integration tests
-        uses: w9jds/firebase-action@master
-        with:
-          args: emulators:exec --only firestore --project fake-project-id 'go test ./... -v -race -tags=test_firebase'
+        run: firebase emulators:exec --only firestore --project fake-project-id 'go test ./... -v -race -tags=test_firebase'
 
   lint:
     if: "!startsWith(github.event.head_commit.message, 'docs')"
