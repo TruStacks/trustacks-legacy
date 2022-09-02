@@ -1,3 +1,5 @@
+//go:build test_firebase
+
 package server
 
 import (

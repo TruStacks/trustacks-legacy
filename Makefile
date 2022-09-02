@@ -1,9 +1,11 @@
 .PHONY: test build clean
 
-test: export FIRESTORE_EMULATOR_HOST=localhost:54321
 test:
 	@go test ./... -v -race
 	@golangci-lint run 
+
+test_firebase:
+	@firebase emulators:exec --only firestore --project fake-project-id 'go test ./... -v -race -tags=test_firebase'
 
 build:
 	@CGO_ENABLED=0 go build -o tsctl ./cmd
