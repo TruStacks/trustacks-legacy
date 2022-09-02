@@ -9,15 +9,17 @@ jobs:
     name: Bump the version and create the changelog with commitizen
     runs-on: ubuntu-latest
     steps:
-    - name: Check out the rpoe
+    - name: Check out the repo
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
         token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
     - name: Create bump and changelog
       uses: commitizen-tools/commitizen-action@master
       with:
         github_token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+
     outputs:
       version: ${{ env.REVISION }}
 
@@ -42,6 +44,8 @@ jobs:
           context: .  
           push: true
           tags: quay.io/trustacks/trustacks:latest,quay.io/trustacks/trustacks:${{needs.bump-version.outputs.version}}
+          build-args: |
+            CLI_VERSION=${{needs.bump-version.outputs.version}}
 
   create-release:
     name: Create release
@@ -78,6 +82,7 @@ jobs:
         binary_name: tsctl
         release_tag: ${{needs.bump-version.outputs.version}}
         project_path: ./cmd
+        ldflags: "-X main.cliVersion=${{needs.bump-version.outputs.version}}"
   
   release-darwin-amd64:
     name: Release darwin/amd64
@@ -95,3 +100,4 @@ jobs:
         binary_name: tsctl
         release_tag: ${{needs.bump-version.outputs.version}}
         project_path: ./cmd
+        ldflags: "-X main.cliVersion=${{needs.bump-version.outputs.version}}"

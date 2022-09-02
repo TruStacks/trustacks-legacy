@@ -20,7 +20,7 @@ source: https://github.com/trustacks/toolchain
 parameters:
   sso: authentik
   ci: concourse
-  netowrk: private
+  network: private
   ingressPort: "8081" # change this value if you used a different port for your k3d loadbalaner
   tls: "false"
 ```
