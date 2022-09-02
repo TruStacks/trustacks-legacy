@@ -28,13 +28,23 @@ jobs:
     name: Firebase Test
     runs-on: ubuntu-latest
     steps:
+      - name: Check out the repo
+        uses: actions/checkout@v3
+        
+      - name: Setup golang
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
+      
       - name: Setup java
         uses: actions/setup-java@v3
         with: 
           distribution: 'zulu'
           java-version: "11"
+      
       - name: Setup firebase tools
         run: curl -sL firebase.tools | bash
+      
       - name: Run firebase integration tests
         run: firebase emulators:exec --only firestore --project fake-project-id 'go test ./... -v -race -tags=test_firebase'
 
