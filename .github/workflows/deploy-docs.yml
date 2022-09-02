@@ -7,6 +7,7 @@ on:
 
 jobs:
   deploy:
+    if: "startsWith(github.event.head_commit.message, 'docs:')"
     name: Deploy the docs to GitHub Pages
     runs-on: ubuntu-latest
     steps:

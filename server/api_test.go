@@ -1,14 +1,13 @@
 package server
 
 import (
-	"encoding/json"
 	"os"
 	"testing"
 
-	"gotest.tools/v3/assert"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestGenerateToolchainConfig(t *testing.T) {
+func TestAPIV1GenerateToolchainConfig(t *testing.T) {
 	spec := `ingressPort: "443"
 network: "public"
 tls: "true"
@@ -21,22 +20,18 @@ tls: "true"
 	if _, err := tf.Write([]byte(spec)); err != nil {
 		t.Fatal(err)
 	}
-	path, err := generateToolchainConfig("test", "https://local.gd/test/toolchain", tf.Name(), map[string]interface{}{"domain": "local.gd"})
+	path, config, err := (&apiV1{}).generateToolchainConfig("test", "https://local.gd/test/toolchain", tf.Name(), map[string]interface{}{"domain": "local.gd"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	configRaw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		t.Fatal("expected the config file to exist")
 	}
-	config := map[string]interface{}{}
-	if err := json.Unmarshal(configRaw, &config); err != nil {
-		t.Fatal(err)
-	}
+	params := config["parameters"].(map[string]interface{})
 	assert.Equal(t, "test", config["name"].(string), "got an unexpected config name")
 	assert.Equal(t, "https://local.gd/test/toolchain", config["source"].(string), "got an unexpected config source")
-	assert.Equal(t, "443", config["parameters"].(map[string]interface{})["ingressPort"], "got an unexpected config ingressPort parameter")
-	assert.Equal(t, "public", config["parameters"].(map[string]interface{})["network"], "got an unexpected config network parameter")
-	assert.Equal(t, "true", config["parameters"].(map[string]interface{})["tls"], "got an unexpected config tls parameter")
-	assert.Equal(t, "test.local.gd", config["parameters"].(map[string]interface{})["domain"], "got an unexpected config domain parameter")
+	assert.Equal(t, "443", params["ingressPort"], "got an unexpected config ingressPort parameter")
+	assert.Equal(t, "public", params["network"], "got an unexpected config network parameter")
+	assert.Equal(t, "true", params["tls"], "got an unexpected config tls parameter")
+	assert.Equal(t, "test.local.gd", params["domain"], "got an unexpected config domain parameter")
 }

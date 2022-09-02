@@ -1,5 +1,6 @@
 .PHONY: test build clean
 
+test: export FIRESTORE_EMULATOR_HOST=localhost:54321
 test:
 	@go test ./... -v -race
 	@golangci-lint run 
