@@ -3,9 +3,11 @@ package server
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
+	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -13,6 +15,9 @@ import (
 // toolchainsCollection is the name of toolchains firebase
 // collection.
 const toolchainsCollection = "toolchains"
+
+// firebaseCredentials contains the firebase service account.
+var firebaseCredentials = os.Getenv("FIREBASE_CREDENTIALS")
 
 // firebaseProvider is the firebase database provider.
 type firebaseProvider struct {
@@ -42,7 +47,8 @@ func (p *firebaseProvider) createToolchain(name string, data map[string]interfac
 // newFirebaseProvider returns a firebase databse provider instance.
 func newFirebaseProvider() (databaseProvider, error) {
 	ctx := context.Background()
-	app, err := firebase.NewApp(ctx, nil)
+	sa := option.WithCredentialsFile(firebaseCredentials)
+	app, err := firebase.NewApp(ctx, nil, sa)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing app: %v", err)
 	}

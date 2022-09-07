@@ -24,10 +24,11 @@ var (
 	muxHandlers map[string]*jrpc2.MuxHandler
 	// defaultParameters is the path to the default toolchain parameters.
 	defaultParameters = os.Getenv("DEFAULT_PARAMETERS")
-	// cloud firestore client.
+	// databaseProviders is a mapping of supported database providers.
 	databaseProviders = map[string]func() (databaseProvider, error){
 		"firebase": newFirebaseProvider,
 	}
+	// database is the database provider singleton.
 	database databaseProvider
 )
 
@@ -121,7 +122,6 @@ func (api *apiV1) installToolchain(params json.RawMessage) (interface{}, *jrpc2.
 			Data:    err.Error(),
 		}
 	}
-	defer os.Remove(configPath)
 	if err := api.createToolchain(p.Name, config); err != nil {
 		return nil, &jrpc2.ErrorObject{
 			Code:    -32000,
@@ -130,6 +130,7 @@ func (api *apiV1) installToolchain(params json.RawMessage) (interface{}, *jrpc2.
 		}
 	}
 	go func() {
+		defer os.Remove(configPath)
 		if err := toolchain.Install(configPath, false, git.PlainClone); err != nil {
 			log.Println(err)
 		}
