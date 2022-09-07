@@ -1,3 +1,9 @@
+## 0.3.1 (2022-09-07)
+
+### Fix
+
+- use dedicated firebase credentials instead of the google application credential env var
+
 ## 0.3.0 (2022-09-02)
 
 ## 0.2.0 (2022-09-02)
