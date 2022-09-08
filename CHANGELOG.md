@@ -1,3 +1,10 @@
+## 0.4.0 (2022-09-08)
+
+### Feat
+
+- add root directory modifier
+- add DATA_DIR root directory modifier
+
 ## 0.3.1 (2022-09-07)
 
 ### Fix
