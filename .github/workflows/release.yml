@@ -23,30 +23,6 @@ jobs:
     outputs:
       version: ${{ env.REVISION }}
 
-  build:
-    name: Push the container image to Quay
-    runs-on: ubuntu-latest
-    needs: [bump-version]
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v3
-      
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v3
-        with:
-          context: .  
-          push: true
-          tags: quay.io/trustacks/trustacks:latest,quay.io/trustacks/trustacks:${{needs.bump-version.outputs.version}}
-          build-args: |
-            CLI_VERSION=${{needs.bump-version.outputs.version}}
-
   create-release:
     name: Create release
     runs-on: ubuntu-latest
