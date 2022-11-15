@@ -33,6 +33,9 @@ var (
 	toolchainRoot = filepath.Join(pkg.RootDir, "toolchains")
 )
 
+type Config struct {
+}
+
 // component represents a toolchain component.
 type component struct {
 	Repo             string `json:"repository"`

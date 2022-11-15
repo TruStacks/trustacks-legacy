@@ -1,0 +1,16 @@
+version: '3.9'
+
+services:
+  devcontainer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["sleep", "infinity"]
+    volumes:
+    - ..:/workspace:cached
+  minio:
+    image: minio/minio
+    command:
+    - server 
+    - /data
+    restart: always
