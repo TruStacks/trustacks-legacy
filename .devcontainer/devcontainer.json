@@ -1,7 +1,21 @@
 {
+	"build": {
+			"args": {
+					"VARIANT": "1.18-bullseye"
+			}
+	},
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "devcontainer",
-	"runServices": ["minio"],
+	"runServices": [
+			"buildkitd",
+			"postgresql",
+			"temporal",
+			"temporal-admin-tools",
+			"temporal-ui",
+			"loki",
+			"promtail",
+			"grafana"
+	],
 	"workspaceFolder": "/workspace",
 	"shutdownAction": "none",
 	"remoteUser": "vscode"
