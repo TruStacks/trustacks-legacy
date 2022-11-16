@@ -8,8 +8,19 @@ RUN curl -LO https://github.com/mozilla/sops/releases/download/v3.7.3/sops-v3.7.
     sudo install sops-v3.7.3.linux.amd64 /usr/local/bin/sops && \
     rm -f sops-v3.7.3.linux.amd64
 
-ARG NODE_VERSION="none"
-RUN if [ "${NODE_VERSION}" != "none" ]; then su vscode -c "umask 0002 && . /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION} 2>&1"; fi
+RUN apt update && apt-get install \
+    ca-certificates \
+    curl \
+    gnupg \
+    lsb-release
 
-# install the firebase emulator
-RUN curl -sL firebase.tools | bash
+RUN sudo mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+RUN echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
+    $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
+    apt-get update && \
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+RUN usermod -aG docker vscode

@@ -31,7 +31,7 @@ func writeConfig(kind string, config map[string]string, path string, audit strin
 		if err := b.Put([]byte("_aud"), []byte(audit)); err != nil {
 			return err
 		}
-		if err := b.Put([]byte("_ts"), []byte(time.Now().Format(time.RFC3339))); err != nil {
+		if err := b.Put([]byte("_t    s"), []byte(time.Now().Format(time.RFC3339))); err != nil {
 			return err
 		}
 		for key, value := range config {
