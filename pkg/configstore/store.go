@@ -7,17 +7,19 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/scrypt"
+	"gopkg.in/yaml.v3"
 )
 
 var dataDir = "/data"
 
-func writeConfig(kind string, config map[string]string, path string, audit string) error {
+func writeConfig(kind string, config map[string]string, path string, audit string, callback func() error) error {
 	db, err := bolt.Open(filepath.Join(dataDir, path), 0666, nil)
 	if err != nil {
 		log.Fatal(err)
@@ -31,7 +33,7 @@ func writeConfig(kind string, config map[string]string, path string, audit strin
 		if err := b.Put([]byte("_aud"), []byte(audit)); err != nil {
 			return err
 		}
-		if err := b.Put([]byte("_t    s"), []byte(time.Now().Format(time.RFC3339))); err != nil {
+		if err := b.Put([]byte("_ts"), []byte(time.Now().Format(time.RFC3339))); err != nil {
 			return err
 		}
 		for key, value := range config {
@@ -42,7 +44,7 @@ func writeConfig(kind string, config map[string]string, path string, audit strin
 				return err
 			}
 		}
-		return nil
+		return callback()
 	})
 }
 
@@ -141,4 +143,45 @@ func deriveKey(passphrase string, salt []byte) ([]byte, []byte, error) {
 	}
 
 	return key, salt, nil
+}
+
+func exportValuesToFile(path string) (string, error) {
+	// export the values at the provided path
+	// get all variables and secrets
+	// aggregated into single map(), marshaled into yaml
+	// write to a temp file, return path of temp file
+	// write > read
+	// test:
+	// 	you can write variables and secrets to config (run secrets thru encrypt func)
+	//	export to file
+	//  open that file and unmarshal into map()
+	//  validate that you have all values present and decrypted
+	//  arbitrary test path/passphrase
+	// 	clean up test artifacts (run test twice), os.RemoveAll()
+	//  run `make test` to check lint errors
+
+	vars, err := readConfig("vars", path)
+	if err != nil {
+		return "", err
+	}
+	secrets, err := readConfig("secrets", path)
+	if err != nil {
+		return "", err
+	}
+	config := vars
+	for _, j := range secrets {
+		config[j] = secrets[j]
+	}
+	configYaml, err := yaml.Marshal(config)
+	if err != nil {
+		return "", err
+	}
+	file, err := os.Create(path)
+	if err != nil {
+		return "", err
+	}
+	fmt.Println(file.Name())
+	defer file.Close()
+	_, err = file.Write(configYaml)
+	return path, err
 }
