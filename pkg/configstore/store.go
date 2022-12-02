@@ -145,43 +145,28 @@ func deriveKey(passphrase string, salt []byte) ([]byte, []byte, error) {
 	return key, salt, nil
 }
 
-func exportValuesToFile(path string) (string, error) {
-	// export the values at the provided path
-	// get all variables and secrets
-	// aggregated into single map(), marshaled into yaml
-	// write to a temp file, return path of temp file
-	// write > read
-	// test:
-	// 	you can write variables and secrets to config (run secrets thru encrypt func)
-	//	export to file
-	//  open that file and unmarshal into map()
-	//  validate that you have all values present and decrypted
-	//  arbitrary test path/passphrase
-	// 	clean up test artifacts (run test twice), os.RemoveAll()
-	//  run `make test` to check lint errors
-
-	vars, err := readConfig("vars", path)
+func exportValuesToFile(sourcePath string, exportPath string) (string, error) {
+	vars, err := readConfig("vars", sourcePath)
 	if err != nil {
 		return "", err
 	}
-	secrets, err := readConfig("secrets", path)
+	secrets, err := readConfig("secrets", sourcePath)
 	if err != nil {
 		return "", err
 	}
 	config := vars
-	for _, j := range secrets {
-		config[j] = secrets[j]
+	for k, v := range secrets {
+		config[k] = v
 	}
 	configYaml, err := yaml.Marshal(config)
 	if err != nil {
 		return "", err
 	}
-	file, err := os.Create(path)
+	file, err := os.Create(exportPath)
 	if err != nil {
 		return "", err
 	}
-	fmt.Println(file.Name())
 	defer file.Close()
 	_, err = file.Write(configYaml)
-	return path, err
+	return exportPath, err
 }

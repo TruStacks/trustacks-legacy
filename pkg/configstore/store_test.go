@@ -6,14 +6,16 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"gopkg.in/yaml.v3"
+	"gopkg.in/yaml.v2"
 )
 
 type mockWriteConfigCallback struct {
 	called bool
+	count  int
 }
 
 func (m *mockWriteConfigCallback) call() error {
+	m.count += 1
 	m.called = true
 	return nil
 }
@@ -75,21 +77,33 @@ func TestExportValuesToFile(t *testing.T) {
 		"secret1": "asdf1",
 		"secret2": "qwerty2",
 	}
-	dir := os.TempDir()
+
+	previousDataDir := dataDir
+	td, err := os.MkdirTemp("", "dir")
+	check(err)
+	dataDir = td
+	defer func() {
+		dataDir = previousDataDir
+	}()
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dataDir)
 	mockCallback := mockWriteConfigCallback{}
-	err := writeConfig("vars", testVars, "test-read-write/config", "system", mockCallback.call)
+	err = writeConfig("vars", testVars, "config", "system", mockCallback.call)
 	check(err)
-	err = writeConfig("secrets", testSecrets, "test-read-write/config", "system", mockCallback.call)
+	err = writeConfig("secrets", testSecrets, "config", "system", mockCallback.call)
 	check(err)
-	path := fmt.Sprintf("%s%s", dir, "/config.yaml")
-	filePath, err := exportValuesToFile(path)
+	exportPath := fmt.Sprintf("%s/%s", dataDir, "config.yaml")
+	filePath, err := exportValuesToFile("config", exportPath)
 	check(err)
 	defer os.RemoveAll(filePath)
+	assert.FileExists(t, filePath)
 	file, err := os.ReadFile(filePath)
 	check(err)
-	var config string
+	var config map[string]string
 	err = yaml.Unmarshal(file, &config)
 	check(err)
-	assert.Contains(t, config, "qwerty2")
+	assert.Equal(t, "qwerty2", config["secret2"])
 	assert.NotContains(t, config, "random string of text")
 }
