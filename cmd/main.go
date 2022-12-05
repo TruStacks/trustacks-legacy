@@ -8,12 +8,10 @@ import (
 	"github.com/trustacks/trustacks/pkg"
 )
 
-var cliVersion string
-
 // rootCmd is the cobra start command.
 var rootCmd = &cobra.Command{
 	Use:   "tsctl",
-	Short: "Trustacks is the workflow driven value steam delivery platform",
+	Short: "Trustacks software delivery engine",
 }
 
 func main() {

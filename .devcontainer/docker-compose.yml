@@ -7,15 +7,20 @@ services:
       dockerfile: Dockerfile
     command: ["sleep", "infinity"]
     environment:
+      DOCKER_HOST: dind:2375
       BUILDKIT_HOST: tcp://buildkitd:1234
     volumes:
     - ..:/workspace:cached
+    privileged: true
   minio:
     image: minio/minio
     command:
     - server 
     - /data
     restart: always
+    ports:
+    - 49000:9000
+    - 49001:9001
   buildkitd:
     image: moby/buildkit:rootless
     command:
@@ -32,8 +37,6 @@ services:
       POSTGRES_PASSWORD: temporal
       POSTGRES_USER: temporal
     image: postgres
-    ports:
-      - 5432:5432
   temporal:
     container_name: temporal
     depends_on:
@@ -46,8 +49,6 @@ services:
       - POSTGRES_SEEDS=postgresql
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
     image: temporalio/auto-setup
-    ports:
-      - 7233:7233
     volumes:
       - ./dynamicconfig:/etc/temporal/config/dynamicconfig
     labels:
@@ -70,11 +71,11 @@ services:
       - TEMPORAL_CORS_ORIGINS=http://localhost:3000
     image: temporalio/ui
     ports:
-      - 8080:8080
+      - 48080:8080
   loki:
     image: grafana/loki:2.6.0
     ports:
-      - "3100:3100"
+      - "43100:3100"
     command: -config.file=/etc/loki/local-config.yaml
   promtail:
     image: grafana/promtail:2.6.0
@@ -84,4 +85,4 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "43000:3000"

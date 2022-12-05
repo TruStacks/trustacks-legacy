@@ -2,7 +2,7 @@ package pkg
 
 import (
 	"os"
-	"path"
+	"path/filepath"
 )
 
 var (
@@ -11,9 +11,9 @@ var (
 		if os.Getenv("DATA_DIR") != "" {
 			return os.Getenv("DATA_DIR")
 		}
-		return path.Join(os.Getenv("HOME"), ".trustacks")
+		return filepath.Join(os.Getenv("HOME"), ".tsconfig")
 	}()
 
 	// BinDir is the binary dependencies directory.
-	BinDir = path.Join(RootDir, "bin")
+	BinDir = filepath.Join(RootDir, "bin")
 )

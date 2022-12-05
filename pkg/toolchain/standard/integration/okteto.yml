@@ -1,0 +1,24 @@
+deploy:
+- kubectl apply -f base.yml
+destroy:
+- kubectl delete -f base.yml
+dev:
+  base:
+    environment:
+      STORAGE_URL: ${STORAGE_URL}
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID}
+      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY}
+    autocreate: true
+    image: okteto/golang:1
+    command: bash # go test --tags=integration ./pkg/toolchain/standard/integration/... -v
+    serviceAccount: trustacks-controller
+    securityContext:
+      capabilities:
+        add:
+        - SYS_PTRACE
+    workdir: /usr/src/app
+    volumes:
+    - /go/pkg/
+    - /root/.cache/go-build/
+    sync:
+    - ../../../../:/usr/src/app

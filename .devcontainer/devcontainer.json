@@ -14,9 +14,28 @@
 			"temporal-ui",
 			"loki",
 			"promtail",
-			"grafana"
+			"grafana",
+			"minio"
 	],
 	"workspaceFolder": "/workspace",
 	"shutdownAction": "none",
-	"remoteUser": "vscode"
+	"remoteUser": "vscode",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"k3d.paths": {
+					"k3d.paths.k3d-linux": "/usr/local/bin/k3d"
+				},
+				"vs-kubernetes": {
+					"vscode-kubernetes.kubectl-path.linux": "/usr/local/bin/kubectl",
+					"vscode-kubernetes.helm-path.linux": "/usr/local/bin/helm"
+				}
+			},
+			"extensions": [
+				"inercia.vscode-k3d",
+				"ms-kubernetes-tools.vscode-kubernetes-tools"
+			]
+		}
+	},
+	"postStartCommand": "post-start"
 }
