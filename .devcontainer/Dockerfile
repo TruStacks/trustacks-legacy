@@ -31,6 +31,9 @@ RUN echo -e 'token: "secret"\ndebug: true' && \
 RUN apt remove iptables nftables -y
 ENV PATH="/var/lib/rancher/k3s/data/current/bin/:/var/lib/rancher/k3s/data/current/bin/aux:$PATH"
 
+# copy k3s traefik config
+COPY traefik-config.yaml /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+
 # install kubectl & helm / kelm-s3
 RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
     sudo ln -s $(which bsdtar) /usr/local/bin/tar

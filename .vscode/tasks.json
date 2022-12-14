@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start k3s",
+      "type": "shell",
+      "command": "cd /tmp && sudo k3s server --flannel-backend none --write-kubeconfig-mode 644",
+    }
+  ]
+}

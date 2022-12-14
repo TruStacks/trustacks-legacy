@@ -13,20 +13,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/trustacks/trustacks/pkg/toolchain/standard/profile"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/client"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
-
-// patchAPIToken mock patches the api token secret.
-func patchAPIToken() func() {
-	previousApiTokenSecret := apiTokenSecret
-	apiTokenSecret = "test-bootstrap"
-	return func() {
-		apiTokenSecret = previousApiTokenSecret
-	}
-}
 
 func TestGetChart(t *testing.T) {
 	path, err := (&Authentik{}).GetChart()
@@ -50,19 +42,21 @@ func TestGetChart(t *testing.T) {
 
 func TestGetValues(t *testing.T) {
 	t.Run("insecure-endpoint", func(t *testing.T) {
-		iface, err := (&Authentik{domain: "local.gd"}).GetValues()
+		c, err := New(profile.Profile{Domain: "local.gd", Insecure: true}).GetValues("test")
 		if err != nil {
 			t.Fatal(err)
 		}
-		v := iface.(*values)
+		v := c.(*values)
+		assert.Equal(t, "authentik-9f86d08", v.FullnameOverride)
 		assert.Len(t, v.Authentik.SecretKey, 32)
 		assert.Equal(t, "authentik-postgresql", v.Authentik.Postgresql.Host)
 		assert.True(t, v.Ingress.Enabled)
+		assert.Empty(t, v.Ingress.Annotations)
+		assert.Empty(t, v.Ingress.TLS)
 		assert.Equal(t, "authentik.local.gd", v.Ingress.Hosts[0].Host)
 		assert.Equal(t, "/", v.Ingress.Hosts[0].Paths[0].Path)
 		assert.Equal(t, "Prefix", v.Ingress.Hosts[0].Paths[0].PathType)
 		assert.True(t, v.Postgresql.Enabled)
-		assert.Equal(t, "authentik-postgresql", v.Postgresql.FullnameOverride)
 		assert.Equal(t, "authentik-postgresql", v.Postgresql.ExistingSecret)
 		assert.Equal(t, "restic", v.Postgresql.Primary.Sidecars[0].Name)
 		assert.Equal(t, "restic/restic", v.Postgresql.Primary.Sidecars[0].Image)
@@ -99,23 +93,23 @@ func TestGetValues(t *testing.T) {
 	})
 
 	t.Run("secure-endpoint", func(t *testing.T) {
-		iface, err := (&Authentik{domain: "local.gd"}).GetValues()
+		c, err := New(profile.Profile{Domain: "test.trustacks.io"}).GetValues("test")
 		if err != nil {
 			t.Fatal(err)
 		}
-		v := iface.(*values)
+		v := c.(*values)
+		assert.Equal(t, "authentik-9f86d08", v.FullnameOverride)
 		assert.Len(t, v.Authentik.SecretKey, 32)
 		assert.Equal(t, "authentik-postgresql", v.Authentik.Postgresql.Host)
 		assert.True(t, v.Ingress.Enabled)
-		assert.Equal(t, "authentik.local.gd", v.Ingress.Hosts[0].Host)
+		assert.Equal(t, "authentik.test.trustacks.io", v.Ingress.Hosts[0].Host)
 		assert.Equal(t, "/", v.Ingress.Hosts[0].Paths[0].Path)
 		assert.Equal(t, "Prefix", v.Ingress.Hosts[0].Paths[0].PathType)
 		assert.Equal(t, "ts-system", v.Ingress.Annotations["cert-manager.io/cluster-issuer"])
 		assert.Equal(t, "ts-system", v.Ingress.Annotations["kubernetes.io/ingress.class"])
-		assert.Contains(t, v.Ingress.TLS[0].Hosts, "authentik.local.gd")
+		assert.Contains(t, v.Ingress.TLS[0].Hosts, "authentik.test.trustacks.io")
 		assert.Equal(t, "authentik-ingress-tls-cert", v.Ingress.TLS[0].SecretName)
 		assert.True(t, v.Postgresql.Enabled)
-		assert.Equal(t, "authentik-postgresql", v.Postgresql.FullnameOverride)
 		assert.Equal(t, "authentik-postgresql", v.Postgresql.ExistingSecret)
 		assert.Equal(t, "restic", v.Postgresql.Primary.Sidecars[0].Name)
 		assert.Equal(t, "restic/restic", v.Postgresql.Primary.Sidecars[0].Image)
@@ -207,24 +201,29 @@ func TestRestore(t *testing.T) {
 
 func TestGetOIDCDiscoveryURL(t *testing.T) {
 	t.Run("insecure-endpoint", func(t *testing.T) {
-		c := New("local.gd", 8081, true)
-		assert.Equal(t, "http://authentik.local.gd:8081/application/o/test/", c.GetOIDCDiscoveryURL("test", true))
+		assert.Equal(
+			t,
+			"http://authentik.local.gd:8081/application/o/test/",
+			GetOIDCDiscoveryURL("local.gd", "test", 8081, true),
+		)
 	})
 
 	t.Run("secure-endpoint", func(t *testing.T) {
-		c := New("test.trustacks.io", 443, true)
-		assert.Equal(t, "https://authentik.test.trustacks.io:443/application/o/test/", c.GetOIDCDiscoveryURL("test", false))
+		assert.Equal(
+			t,
+			"https://authentik.test.trustacks.io:443/application/o/test/",
+			GetOIDCDiscoveryURL("test.trustacks.io", "test", 443, false),
+		)
 	})
 }
 
 func TestCreateAPIToken(t *testing.T) {
-	defer patchAPIToken()()
 	clientset := fake.NewSimpleClientset()
 	namespace := "test"
 	if err := createAPIToken(namespace, "test-token", clientset); err != nil {
 		t.Fatal(err)
 	}
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), apiTokenSecret, metav1.GetOptions{})
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), "authentik-bootstrap", metav1.GetOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,11 +236,10 @@ func TestCreateAPIToken(t *testing.T) {
 }
 
 func TestGetAPIToken(t *testing.T) {
-	defer patchAPIToken()()
 	clientset := fake.NewSimpleClientset()
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-bootstrap",
+			Name: "authentik-bootstrap",
 		},
 		Data: map[string][]byte{
 			"api-token": []byte("test-token"),

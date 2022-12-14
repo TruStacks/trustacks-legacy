@@ -16,6 +16,9 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
+// inClusterNamespace is the path to the in-cluster namespace.
+const inClusterNamespace = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+
 type Dispatcher interface {
 	Clientset() kubernetes.Interface
 	CreateNamespace() error
@@ -172,4 +175,12 @@ func NewDispatcher(namespace string) (Dispatcher, error) {
 	}
 	dispatcher.helmClient = helmClient
 	return dispatcher, nil
+}
+
+func GetNamespace() (string, error) {
+	data, err := os.ReadFile(inClusterNamespace)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), err
 }

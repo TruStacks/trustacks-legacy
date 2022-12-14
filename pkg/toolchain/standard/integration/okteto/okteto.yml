@@ -1,6 +1,9 @@
 deploy:
 - kubectl apply -f base.yml
+- helm repo add minio https://charts.bitnami.com/bitnami
+- helm upgrade --install minio -n integration-test-utils -f minio-values.yaml minio/minio
 destroy:
+- helm delete minio -n integration-test-utils
 - kubectl delete -f base.yml
 dev:
   base:
@@ -21,4 +24,4 @@ dev:
     - /go/pkg/
     - /root/.cache/go-build/
     sync:
-    - ../../../../:/usr/src/app
+    - ../../../../../:/usr/src/app

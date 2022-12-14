@@ -1,6 +1,8 @@
 package chartutils
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 
@@ -50,6 +52,14 @@ func (c *chart) Save() (string, error) {
 		return "", err
 	}
 	return chartDir, nil
+}
+
+func UniqueID(namespace string) (string, error) {
+	h := sha256.New()
+	if _, err := h.Write([]byte(namespace)); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s", hex.EncodeToString(h.Sum(nil))[:7]), nil
 }
 
 // NewChart creates a new chart instance.

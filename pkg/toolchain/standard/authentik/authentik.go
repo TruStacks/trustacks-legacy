@@ -15,56 +15,46 @@ import (
 	"time"
 
 	"github.com/sethvargo/go-password/password"
+	"github.com/trustacks/trustacks/pkg/toolchain/standard/profile"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/chartutils"
-	k8s "github.com/trustacks/trustacks/pkg/toolchain/utils/client"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/client"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 const (
 	// componentName is the name of the component.
 	componentName = "authentik"
-	// inClusterNamespace is the path to the in-cluster namespace.
-	inClusterNamespace = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 	// serviceURL is the authentik kubernetes service name.
 	serviceURL = "http://authentik"
 )
 
-// apiTokenSecret is the secret where the api token is stored.
-var apiTokenSecret = "authentik-bootstrap"
+//go:embed authentik-2022.11.0.tgz
+var chartArchive []byte
 
-// Authentik represents an authentik instance..
 type Authentik struct {
-	domain   string
-	port     uint16
-	insecure bool
-	skipTLS  bool
+	profile profile.Profile
 }
 
-// values is the helm values root.
 type values struct {
-	Authentik    valuesAuthentik    `yaml:"authentik"`
-	Ingress      valuesIngress      `yaml:"ingress"`
-	Postgresql   valuesPostgresql   `yaml:"postgresql"`
-	Redis        valuesRedis        `yaml:"redis"`
-	EnvValueFrom valuesEnvValueFrom `yaml:"envValueFrom"`
+	FullnameOverride string             `yaml:"fullnameOverride"`
+	Authentik        valuesAuthentik    `yaml:"authentik"`
+	Ingress          valuesIngress      `yaml:"ingress"`
+	Postgresql       valuesPostgresql   `yaml:"postgresql"`
+	Redis            valuesRedis        `yaml:"redis"`
+	EnvValueFrom     valuesEnvValueFrom `yaml:"envValueFrom"`
 }
 
-// valuesAuthentik contains the authentik secret key and postgresql
-// parameters.
 type valuesAuthentik struct {
 	SecretKey  string                    `yaml:"secret_key"`
 	Postgresql valuesAuthentikPostgresql `yaml:"postgresql"`
 }
 
-// valuesAuthentikPostgresql contains the postgresql hostname.
 type valuesAuthentikPostgresql struct {
 	Host string `yaml:"host"`
 }
 
-// valuesIngress contains the ingress parameters.
 type valuesIngress struct {
 	Enabled     bool                 `yaml:"enabled"`
 	Hosts       []valuesIngressHosts `yaml:"hosts"`
@@ -72,25 +62,21 @@ type valuesIngress struct {
 	TLS         []valuesIngressTLS   `yaml:"tls,omitempty"`
 }
 
-// valuesIngressHosts contains the ingress host and path.
 type valuesIngressHosts struct {
 	Host  string                  `yaml:"host"`
 	Paths []valuesIngressHostPath `yaml:"paths"`
 }
 
-// valuesIngressHostPath contains the ingress path and path type.
 type valuesIngressHostPath struct {
 	Path     string `yaml:"path"`
 	PathType string `yaml:"pathType"`
 }
 
-// valuesIngressTLS contains the tls host and secret name.
 type valuesIngressTLS struct {
 	Hosts      []string `yaml:"hosts"`
 	SecretName string   `yaml:"secretName"`
 }
 
-// valuesPostgresql contains the postgresql subchart parameters.
 type valuesPostgresql struct {
 	Enabled          bool                    `yaml:"enabled"`
 	FullnameOverride string                  `yaml:"fullnameOverride"`
@@ -98,33 +84,26 @@ type valuesPostgresql struct {
 	Primary          valuesPostgresqlPrimary `yaml:"primary"`
 }
 
-// valuesPostgresqlPrimary contains volume mounts and sidecars.
 type valuesPostgresqlPrimary struct {
 	ExtraVolumes      []valuesPostgresqlPrimaryExtraVolumes      `yaml:"extraVolumes"`
 	ExtraVolumeMounts []valuesPostgresqlPrimaryExtraVolumeMounts `yaml:"extraVolumeMounts"`
 	Sidecars          []valuesPostgresqlPrimarySidecars          `yaml:"sidecars"`
 }
 
-// valuesPostgresqlPrimaryExtraVolumeMounts contains volume mount
-// parameters.
 type valuesPostgresqlPrimaryExtraVolumeMounts struct {
 	Name      string `yaml:"name"`
 	MountPath string `yaml:"mountPath"`
 }
 
-// valuesPostgresqlPrimaryExtraVolumes contains empty dir volumes.
 type valuesPostgresqlPrimaryExtraVolumes struct {
 	Name     string                                      `yaml:"name"`
 	EmptyDir valuesPostgresqlPrimaryExtraVolumesEmptyDir `yaml:"emptyDir"`
 }
 
-// valuesPostgresqlPrimaryExtraVolumesEmptyDir contains the empty dir
-// size limit.
 type valuesPostgresqlPrimaryExtraVolumesEmptyDir struct {
 	SizeLimit string `yaml:"sizeLimit"`
 }
 
-// valuesPostgresqlPrimarySidecars contains sidecar parameters.
 type valuesPostgresqlPrimarySidecars struct {
 	Name         string                                        `yaml:"name"`
 	Image        string                                        `yaml:"image"`
@@ -134,96 +113,64 @@ type valuesPostgresqlPrimarySidecars struct {
 	Env          []valuesPostgresqlPrimarySidecarsEnv          `yaml:"env"`
 }
 
-// valuesPostgresqlPrimarySidecarsVolumeMounts contains sidecar volume mounts.
 type valuesPostgresqlPrimarySidecarsVolumeMounts struct {
 	Name      string `yaml:"name"`
 	MountPath string `yaml:"mountPath"`
 }
 
-// valuesPostgresqlPrimarySidecarsEnv contains sidecar environment variables.
 type valuesPostgresqlPrimarySidecarsEnv struct {
 	Name      string                                      `yaml:"name"`
 	ValueFrom valuesPostgresqlPrimarySidecarsEnvValueFrom `yaml:"valueFrom,omitempty"`
 }
 
-// valuesPostgresqlPrimarySidecarsEnvValueFrom contains environemt variable
-// secret key references.
 type valuesPostgresqlPrimarySidecarsEnvValueFrom struct {
 	SecretKeyRef valuesPostgresqlPrimarySidecarsEnvValueFromSecretKeyRef `yaml:"secretKeyRef"`
 }
 
-// valuesPostgresqlPrimarySidecarsEnvValueFromSecretKeyRef contains
-// the secret key reference name and key.
 type valuesPostgresqlPrimarySidecarsEnvValueFromSecretKeyRef struct {
 	Name string `yaml:"name"`
 	Key  string `yaml:"key"`
 }
 
-// valuesRedis contains the redis subchart parameters.
 type valuesRedis struct {
 	Enabled bool `yaml:"enabled"`
 }
 
-// valuesEnvValueFrom contains the postgresql password and api
-// bootstrap token parameters.
 type valuesEnvValueFrom struct {
 	AuthentikPostgresqlPassword valuesEnvValueFromAuthentikPostgresqlPassword `yaml:"AUTHENTIK_POSTGRESQL__PASSWORD"`
 	AuthentikBootstrapToken     valuesEnvValueFromAuthentikBootstrapToken     `yaml:"AUTHENTIK_BOOTSTRAP_TOKEN"`
 }
 
-// valuesEnvValueFromAuthentikPostgresqlPassword contains the
-// postgresql password secret key reference.
 type valuesEnvValueFromAuthentikPostgresqlPassword struct {
 	SecretKeyRef valuesEnvValueFromAuthentikPostgresqlPasswordSecretKeyRef `yaml:"secretKeyRef"`
 }
 
-// valuesEnvValueFromAuthentikPostgresqlPasswordSecretKeyRef
-// contains the postgresql password secret key reference name and
-// key.
 type valuesEnvValueFromAuthentikPostgresqlPasswordSecretKeyRef struct {
 	Name string `yaml:"name"`
 	Key  string `yaml:"key"`
 }
 
-// valuesEnvValueFromAuthentikBootstrapToken contains the api
-// bootstrap token secret key reference.
 type valuesEnvValueFromAuthentikBootstrapToken struct {
 	SecretKeyRef valuesEnvValueFromAuthentikBootstrapTokenSecretKeyRef `yaml:"secretKeyRef"`
 }
 
-// valuesEnvValueFromAuthentikBootstrapTokenSecretKeyRef the api
-// bootstrap token secret key reference name and key..
 type valuesEnvValueFromAuthentikBootstrapTokenSecretKeyRef struct {
 	Name string `yaml:"name"`
 	Key  string `yaml:"key"`
 }
 
-//go:embed authentik-2022.11.0.tgz
-var chartArchive []byte
-
-// GetChart returns the authentik helm chart archive.
-func (c *Authentik) GetChart() (string, error) {
-	chart, err := chartutils.NewChart(componentName, chartArchive)
-	if err != nil {
-		return "", err
-	}
-	path, err := chart.Save()
-	if err != nil {
-		return "", err
-	}
-	return path, nil
-}
-
 // GetValues creates the helm values file.
-func (c *Authentik) GetValues() (interface{}, error) {
+func (c *Authentik) GetValues(namespace string) (interface{}, error) {
 	secretKey, err := password.Generate(32, 10, 0, false, false)
 	if err != nil {
 		return "", err
 	}
+	uid, err := chartutils.UniqueID(namespace)
 	if err != nil {
 		return "", err
 	}
 	v := &values{
+		FullnameOverride: fmt.Sprintf("authentik-%s", uid),
 		Authentik: valuesAuthentik{
 			SecretKey: secretKey,
 			Postgresql: valuesAuthentikPostgresql{
@@ -234,7 +181,7 @@ func (c *Authentik) GetValues() (interface{}, error) {
 			Enabled: true,
 			Hosts: []valuesIngressHosts{
 				{
-					Host: fmt.Sprintf("authentik.%s", c.domain),
+					Host: fmt.Sprintf("authentik.%s", c.profile.Domain),
 					Paths: []valuesIngressHostPath{
 						{
 							Path:     "/",
@@ -245,9 +192,8 @@ func (c *Authentik) GetValues() (interface{}, error) {
 			},
 		},
 		Postgresql: valuesPostgresql{
-			Enabled:          true,
-			FullnameOverride: "authentik-postgresql",
-			ExistingSecret:   "authentik-postgresql",
+			Enabled:        true,
+			ExistingSecret: "authentik-postgresql",
 			Primary: valuesPostgresqlPrimary{
 				Sidecars: []valuesPostgresqlPrimarySidecars{
 					{
@@ -349,14 +295,14 @@ func (c *Authentik) GetValues() (interface{}, error) {
 			},
 		},
 	}
-	if !c.skipTLS {
+	if !c.profile.Insecure {
 		v.Ingress.Annotations = map[string]string{
 			"cert-manager.io/cluster-issuer": "ts-system",
 			"kubernetes.io/ingress.class":    "ts-system",
 		}
 		v.Ingress.TLS = []valuesIngressTLS{
 			{
-				Hosts:      []string{fmt.Sprintf("authentik.%s", c.domain)},
+				Hosts:      []string{fmt.Sprintf("authentik.%s", c.profile.Domain)},
 				SecretName: "authentik-ingress-tls-cert",
 			},
 		}
@@ -364,30 +310,32 @@ func (c *Authentik) GetValues() (interface{}, error) {
 	return v, nil
 }
 
-// GetOIDCDiscoveryURL returns the service's oidc discovery url.
-func (c *Authentik) GetOIDCDiscoveryURL(service string, skipTLS bool) string {
-	var scheme string
-	if skipTLS {
-		scheme = "http"
-	} else {
-		scheme = "https"
+// GetChart returns the authentik helm chart archive.
+func (c *Authentik) GetChart() (string, error) {
+	chart, err := chartutils.NewChart(componentName, chartArchive)
+	if err != nil {
+		return "", err
 	}
-	return fmt.Sprintf("%s://%s.%s:%d/application/o/%s/", scheme, componentName, c.domain, c.port, service)
+	path, err := chart.Save()
+	if err != nil {
+		return "", err
+	}
+	return path, nil
 }
 
-// Install .
-func (c *Authentik) Install(dispatcher k8s.Dispatcher, namespace string) error {
+// Install runs pre installation tasks and install the component.
+func (c *Authentik) Install(dispatcher client.Dispatcher, namespace string) error {
 	if err := c.preInstall(dispatcher.Clientset(), namespace); err != nil {
 		return err
 	}
 	chartPath, err := c.GetChart()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer os.RemoveAll(chartPath)
-	authentikValues, err := c.GetValues()
+	authentikValues, err := c.GetValues(namespace)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	values := map[string]interface{}{
 		"authentik": authentikValues,
@@ -398,19 +346,19 @@ func (c *Authentik) Install(dispatcher k8s.Dispatcher, namespace string) error {
 	return c.postInstall(dispatcher.Clientset(), namespace)
 }
 
-// Upgrade .
-func (c *Authentik) Upgrade(dispatcher k8s.Dispatcher, namespace string) error {
+// Upgrade backs up and upgrades the component.
+func (c *Authentik) Upgrade(dispatcher client.Dispatcher, namespace string) error {
 	if err := c.backup(dispatcher, namespace); err != nil {
 		return err
 	}
 	chartPath, err := c.GetChart()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer os.RemoveAll(chartPath)
-	authentikValues, err := c.GetValues()
+	authentikValues, err := c.GetValues(namespace)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	values := map[string]interface{}{
 		"authentik": authentikValues,
@@ -418,16 +366,17 @@ func (c *Authentik) Upgrade(dispatcher k8s.Dispatcher, namespace string) error {
 	return dispatcher.UpgradeChart("authentik", values, time.Minute*5, chartPath)
 }
 
-// Rollback.
-func (c *Authentik) Rollback(dispatcher k8s.Dispatcher, namespace string) error {
+// Rollback deploys the previous state of the component and restores
+// the component's data.
+func (c *Authentik) Rollback(dispatcher client.Dispatcher, namespace string) error {
 	chartPath, err := c.GetChart()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	defer os.RemoveAll(chartPath)
-	authentikValues, err := c.GetValues()
+	authentikValues, err := c.GetValues(namespace)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	values := map[string]interface{}{
 		"authentik": authentikValues,
@@ -438,35 +387,15 @@ func (c *Authentik) Rollback(dispatcher k8s.Dispatcher, namespace string) error 
 	return c.restore(dispatcher, namespace)
 }
 
-// Uninstall .
-func (c *Authentik) Uninstall(dispatcher k8s.Dispatcher, namespace string) error {
+// Uninstall removes the component.
+func (c *Authentik) Uninstall(dispatcher client.Dispatcher, namespace string) error {
 	if err := dispatcher.UninstallChart("authentik"); err != nil {
 		return err
 	}
 	return nil
 }
 
-// backup .
-func (c *Authentik) backup(dispatcher k8s.Dispatcher, namespace string) error {
-	cmd := `PGPASSWORD=$POSTGRES_PASSWORD pg_dump -U $POSTGRES_USER -F c -b -v -f /tmp/backup/authentik-postgresql $POSTGRES_DB`
-	if err := dispatcher.ExecCommand("authentik-postgresql-0", "authentik-postgresql", cmd, namespace); err != nil {
-		return err
-	}
-	cmd = `restic check; if [ "$?" == "1" ]; then restic init; fi; restic backup /tmp/backup/authentik-postgresql`
-	return dispatcher.ExecCommand("authentik-postgresql-0", "restic", cmd, namespace)
-}
-
-// restore .
-func (c *Authentik) restore(dispatcher k8s.Dispatcher, namespace string) error {
-	cmd := `restic restore latest --target /tmp/restore --include /tmp/backup/authentik-postgresql`
-	if err := dispatcher.ExecCommand("authentik-postgresql-0", "restic", cmd, namespace); err != nil {
-		return err
-	}
-	cmd = `PGPASWORD=$POSTGRES_PASSWORD pg_restore -U $POSTGRES_USER /tmp/restore/tmp/backup/authentik-postgresql`
-	return dispatcher.ExecCommand("authentik-postgresql-0", "authentik-postgresql", cmd, namespace)
-}
-
-// PreInstall creates the authentik admin api token.
+// preInstall creates the authentik admin api token.
 func (c *Authentik) preInstall(clientset kubernetes.Interface, namespace string) error {
 	apiToken, err := password.Generate(32, 10, 0, false, false)
 	if err != nil {
@@ -485,7 +414,7 @@ func (c *Authentik) preInstall(clientset kubernetes.Interface, namespace string)
 	return nil
 }
 
-// PostInstall creates the authentik user groups.
+// postInstall creates the authentik user groups.
 func (c *Authentik) postInstall(clientset kubernetes.Interface, namespace string) error {
 	token, err := getAPIToken(namespace, clientset)
 	if err != nil {
@@ -493,37 +422,66 @@ func (c *Authentik) postInstall(clientset kubernetes.Interface, namespace string
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
-	if err := healthCheckService(c.getServiceURL(namespace), 2, ctx); err != nil {
+	url, err := c.getServiceURL(namespace)
+	if err != nil {
 		return err
 	}
-	log.Println("create authentik user groups")
-	if err := createGroups(c.getServiceURL(namespace), token); err != nil {
+	if err := healthCheckService(url, 2, ctx); err != nil {
+		return err
+	}
+	if err := createGroups(url, token); err != nil {
 		return err
 	}
 	return nil
 }
 
-// getServiceURL gets the authentik k8s service url.
-func (c *Authentik) getServiceURL(namespace string) string {
-	return fmt.Sprintf("%s.%s.svc.cluster.local", serviceURL, namespace)
+// backup creates a postgresql database dump and writes the backup
+// to the s3 backend.
+func (c *Authentik) backup(dispatcher client.Dispatcher, namespace string) error {
+	cmd := `PGPASSWORD=$POSTGRES_PASSWORD pg_dump -U $POSTGRES_USER -F c -b -v -f /tmp/backup/authentik-postgresql $POSTGRES_DB`
+	if err := dispatcher.ExecCommand("authentik-postgresql-0", "authentik-postgresql", cmd, namespace); err != nil {
+		return err
+	}
+	cmd = `restic check; if [ "$?" == "1" ]; then restic init; fi; restic backup /tmp/backup/authentik-postgresql`
+	return dispatcher.ExecCommand("authentik-postgresql-0", "restic", cmd, namespace)
 }
 
-// New creates a new authentik component instance.
-func New(domain string, port uint16, insecure bool) *Authentik {
-	return &Authentik{domain: domain, insecure: insecure, port: port}
+// restore retrieves the s3 backup and restores the postgresql
+// database backup.
+func (c *Authentik) restore(dispatcher client.Dispatcher, namespace string) error {
+	cmd := `restic restore latest --target /tmp/restore --include /tmp/backup/authentik-postgresql`
+	if err := dispatcher.ExecCommand("authentik-postgresql-0", "restic", cmd, namespace); err != nil {
+		return err
+	}
+	cmd = `PGPASWORD=$POSTGRES_PASSWORD pg_restore -U $POSTGRES_USER /tmp/restore/tmp/backup/authentik-postgresql`
+	return dispatcher.ExecCommand("authentik-postgresql-0", "authentik-postgresql", cmd, namespace)
+}
+
+// getServiceURL gets the authentik k8s service url.
+func (c *Authentik) getServiceURL(namespace string) (string, error) {
+	uid, err := chartutils.UniqueID(namespace)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s-%s.%s.svc.cluster.local", serviceURL, uid, namespace), nil
+}
+
+// New creates a new authentik instance.
+func New(prof profile.Profile) *Authentik {
+	return &Authentik{prof}
 }
 
 // createAPIToken creates the api token secret.
 func createAPIToken(namespace, token string, clientset kubernetes.Interface) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: apiTokenSecret,
+			Name: "authentik-bootstrap",
 		},
 		Data: map[string][]byte{
 			"api-token": []byte(token),
 		},
 	}
-	_, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), apiTokenSecret, metav1.GetOptions{})
+	_, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), "authentik-bootstrap", metav1.GetOptions{})
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			_, err = clientset.CoreV1().Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
@@ -537,7 +495,8 @@ func createAPIToken(namespace, token string, clientset kubernetes.Interface) err
 	return nil
 }
 
-// createPostgresqlPassword .
+// createPostgresqlPassword creates the authentik postgresql
+// database passwords.
 func createPostgresqlPassword(namespace string, password string, clientset kubernetes.Interface) error {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -564,14 +523,13 @@ func createPostgresqlPassword(namespace string, password string, clientset kuber
 
 // getAPIToken gets the api token secret value.
 func getAPIToken(namespace string, clientset kubernetes.Interface) (string, error) {
-	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), apiTokenSecret, metav1.GetOptions{})
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), "authentik-bootstrap", metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
 	return strings.TrimSpace(string(secret.Data["api-token"])), nil
 }
 
-// group represents an authentik group.
 type group struct {
 	Name        string `json:"name"`
 	Users       []int  `json:"users"`
@@ -658,15 +616,6 @@ func postAPIResource(url, resource, token string, data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("'%s' post error: %s", resource, body)
 	}
 	return body, nil
-}
-
-// getNamespace gets the current kubernetes namespace.
-func getNamespace() (string, error) {
-	data, err := os.ReadFile(inClusterNamespace)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), err
 }
 
 // healthCheckService checks the health of the authentik service.
@@ -826,46 +775,61 @@ func createApplication(provider int, name, url, token string) error {
 }
 
 // CreateOIDCClient creates a consumable end to end oidc client.
-func CreateOIDCClient(name string) (map[string]interface{}, error) {
-	config, err := rest.InClusterConfig()
+func CreateOIDCClient(name, namespace string) (string, string, error) {
+	dispatcher, err := client.NewDispatcher(namespace)
 	if err != nil {
-		return nil, err
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	namespace, err := getNamespace()
-	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
-	if err := healthCheckService(serviceURL, 2, ctx); err != nil {
-		return nil, err
-	}
-	token, err := getAPIToken(namespace, clientset)
+	uid, err := chartutils.UniqueID(namespace)
 	if err != nil {
-		return nil, err
+		return "", "", err
+	}
+	serviceURL := fmt.Sprintf("http://authentik-%s.%s.svc.cluster.local", uid, namespace)
+	if err := healthCheckService(serviceURL, 2, ctx); err != nil {
+		return "", "", err
+	}
+	token, err := getAPIToken(namespace, dispatcher.Clientset())
+	if err != nil {
+		return "", "", err
 	}
 	mappings, err := getPropertyMappings(serviceURL, token)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	signingKey, err := getCertificateKeypair(serviceURL, token)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	flow, err := getAuthorizationFlow(serviceURL, token)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	pk, id, secret, err := createOIDCProvider(name, serviceURL, token, flow, signingKey, mappings)
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 	if err := createApplication(pk, name, serviceURL, token); err != nil {
-		return nil, err
+		return "", "", err
 	}
-	return map[string]interface{}{"clientId": id, "clientSecret": secret}, nil
+	return id, secret, nil
+}
+
+// GetOIDCDiscoveryURL returns the service's oidc discovery url.
+func GetOIDCDiscoveryURL(domain, service string, port uint16, insecure bool) string {
+	scheme := "https"
+	if insecure {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s.%s:%d/application/o/%s/", scheme, componentName, domain, port, service)
+}
+
+// GetOIDCEndpoint returns the service's root endpoint.
+func GetOIDCEndpoint(domain string, port uint16, insecure bool) string {
+	scheme := "https"
+	if insecure {
+		scheme = "http"
+	}
+	return fmt.Sprintf("%s://%s.%s:%d/", scheme, componentName, domain, port)
 }
