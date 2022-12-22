@@ -6,20 +6,16 @@ destroy:
 - helm delete minio -n integration-test-utils
 - kubectl delete -f base.yml
 dev:
-  base:
-    environment:
-      STORAGE_URL: ${STORAGE_URL}
-      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID}
-      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY}
+  integration:
     autocreate: true
     image: okteto/golang:1
-    command: bash # go test --tags=integration ./pkg/toolchain/standard/integration/... -v
+    command: bash
     serviceAccount: trustacks-controller
     securityContext:
       capabilities:
         add:
         - SYS_PTRACE
-    workdir: /usr/src/app
+    workdir: /usr/src/app/pkg/toolchain/standard/integration
     volumes:
     - /go/pkg/
     - /root/.cache/go-build/

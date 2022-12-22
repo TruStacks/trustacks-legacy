@@ -190,7 +190,7 @@ type valuesGrafanaDatasourcesYamlDatasources struct {
 	URL    string `yaml:"url"`
 }
 
-// GetValues creates the helm values file.
+// GetValues creates the helm values object.
 func (c *Loki) GetValues(namespace string) (interface{}, error) {
 	urlScheme := "https"
 	if c.profile.Insecure {

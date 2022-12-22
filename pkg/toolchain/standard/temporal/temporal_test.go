@@ -1,6 +1,7 @@
 package temporal
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,9 @@ import (
 	"github.com/trustacks/trustacks/pkg/toolchain/standard/profile"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/chartutils"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/client"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestGetChart(t *testing.T) {
@@ -50,7 +54,7 @@ func TestGetValues(t *testing.T) {
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Default.SQL.Host)
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Default.SQL.ExistingSecret)
 		assert.Equal(t, "sql", v.Server.Config.Persistence.Default.Driver)
-		assert.Equal(t, "temporal", v.Server.Config.Persistence.Visibility.SQL.Database)
+		assert.Equal(t, "temporal_visibility", v.Server.Config.Persistence.Visibility.SQL.Database)
 		assert.Equal(t, "temporal", v.Server.Config.Persistence.Visibility.SQL.User)
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Visibility.SQL.Host)
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Visibility.SQL.ExistingSecret)
@@ -83,11 +87,15 @@ func TestGetValues(t *testing.T) {
 		assert.False(t, v.Elasticsearch.Enabled)
 		assert.False(t, v.Cassandra.Enabled)
 		assert.True(t, v.MySQL.Enabled)
-		assert.True(t, v.MySQL.Auth.CreateDatabase)
-		assert.Equal(t, "temporal", v.MySQL.Auth.Database)
 		assert.Equal(t, "temporal", v.MySQL.Auth.Username)
 		assert.Equal(t, "temporal-mysql", v.MySQL.Auth.ExistingSecret)
-
+		assert.Equal(t, v.MySQL.InitdbScripts["setup.sh"], `
+export MYSQL_PWD=$MYSQL_ROOT_PASSWORD 
+mysql -u root -e "create database temporal"
+mysql -u root -e "grant all privileges on temporal.* to 'temporal'@'%'"
+mysql -u root -e "create database temporal_visibility"
+mysql -u root -e "grant all privileges on temporal_visibility.* to 'temporal'@'%'"
+`)
 		assert.False(t, v.Schema.Setup.Enabled)
 		assert.False(t, v.Schema.Update.Enabled)
 	})
@@ -105,7 +113,7 @@ func TestGetValues(t *testing.T) {
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Default.SQL.Host)
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Default.SQL.ExistingSecret)
 		assert.Equal(t, "sql", v.Server.Config.Persistence.Default.Driver)
-		assert.Equal(t, "temporal", v.Server.Config.Persistence.Visibility.SQL.Database)
+		assert.Equal(t, "temporal_visibility", v.Server.Config.Persistence.Visibility.SQL.Database)
 		assert.Equal(t, "temporal", v.Server.Config.Persistence.Visibility.SQL.User)
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Visibility.SQL.Host)
 		assert.Equal(t, "temporal-mysql", v.Server.Config.Persistence.Visibility.SQL.ExistingSecret)
@@ -133,11 +141,8 @@ func TestGetValues(t *testing.T) {
 		assert.False(t, v.Elasticsearch.Enabled)
 		assert.False(t, v.Cassandra.Enabled)
 		assert.True(t, v.MySQL.Enabled)
-		assert.True(t, v.MySQL.Auth.CreateDatabase)
-		assert.Equal(t, "temporal", v.MySQL.Auth.Database)
 		assert.Equal(t, "temporal", v.MySQL.Auth.Username)
 		assert.Equal(t, "temporal-mysql", v.MySQL.Auth.ExistingSecret)
-
 		assert.False(t, v.Schema.Setup.Enabled)
 		assert.False(t, v.Schema.Update.Enabled)
 	})
@@ -195,4 +200,88 @@ func TestRestore(t *testing.T) {
 			"test",
 		},
 	)
+}
+
+func TestCreateOIDCClientSecret(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	if err := createOIDCClientSecret("client-id", "client-secret", "test", clientset); err != nil {
+		t.Fatal(err)
+	}
+	secret, err := clientset.CoreV1().Secrets("test").Get(context.TODO(), "temporal-oidc-client", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, "client-id", string(secret.Data["client-id"]))
+	assert.Equal(t, "client-secret", string(secret.Data["client-secret"]))
+}
+
+func TestCreateMySQLPasswordSecret(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	pwd, err := createMySQLPasswordSecret("test", clientset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secret, err := clientset.CoreV1().Secrets("test").Get(context.TODO(), "temporal-mysql", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Len(t, secret.Data["mysql-root-password"], 32)
+	assert.Len(t, secret.Data["mysql-replication-password"], 32)
+	assert.Equal(t, pwd, string(secret.Data["mysql-password"]))
+	assert.Equal(t, pwd, string(secret.Data["password"]))
+}
+
+func TestGetMySQLPasswordSecret(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	pwd, err := createMySQLPasswordSecret("test", clientset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mysqlPwd, err := getMySQLPasswordSecret("test", clientset)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, mysqlPwd, pwd)
+}
+
+func TestCreateMySQLSchemaUpdateJob(t *testing.T) {
+	clientset := fake.NewSimpleClientset()
+	if err := createMySQLSchemaUpdateJob("test", "password123!", clientset); err != nil {
+		t.Fatal(err)
+	}
+	job, err := clientset.BatchV1().Jobs("test").Get(context.TODO(), "temporal-mysql-schema-update", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ttlSeconds := int32(0)
+	assert.Equal(t, "temporal-mysql-tool", job.Spec.Template.Spec.Containers[0].Name)
+	assert.Equal(t, "temporalio/admin-tools:1.19.0", job.Spec.Template.Spec.Containers[0].Image)
+	assert.Equal(t, "/bin/sh", job.Spec.Template.Spec.Containers[0].Command[0])
+	assert.Equal(t, "SQL_PLUGIN", job.Spec.Template.Spec.Containers[0].Env[0].Name)
+	assert.Equal(t, "mysql", job.Spec.Template.Spec.Containers[0].Env[0].Value)
+	assert.Equal(t, "SQL_HOST", job.Spec.Template.Spec.Containers[0].Env[1].Name)
+	assert.Equal(t, "temporal-mysql", job.Spec.Template.Spec.Containers[0].Env[1].Value)
+	assert.Equal(t, "SQL_PORT", job.Spec.Template.Spec.Containers[0].Env[2].Name)
+	assert.Equal(t, "3306", job.Spec.Template.Spec.Containers[0].Env[2].Value)
+	assert.Equal(t, "SQL_USER", job.Spec.Template.Spec.Containers[0].Env[3].Name)
+	assert.Equal(t, "temporal", job.Spec.Template.Spec.Containers[0].Env[3].Value)
+	assert.Equal(t, "SQL_PASSWORD", job.Spec.Template.Spec.Containers[0].Env[4].Name)
+	assert.Equal(t, "password123!", job.Spec.Template.Spec.Containers[0].Env[4].Value)
+	assert.Equal(t, "-c", job.Spec.Template.Spec.Containers[0].Args[0])
+	assert.Equal(t, `
+while true; do
+	curl $SQL_HOST:$SQL_PORT > /dev/null
+	if [ "$?" == "1" ]; then
+		temporal-sql-tool --db temporal setup-schema -v 0.0
+		temporal-sql-tool --db temporal update-schema -d ./schema/mysql/v57/temporal/versioned
+		temporal-sql-tool --db temporal_visibility setup-schema -v 0.0
+		temporal-sql-tool --db temporal_visibility update-schema -d ./schema/mysql/v57/visibility/versioned
+		break
+	fi
+	sleep 1
+done
+`,
+		job.Spec.Template.Spec.Containers[0].Args[1])
+	assert.Equal(t, corev1.RestartPolicyOnFailure, job.Spec.Template.Spec.RestartPolicy)
+	assert.Equal(t, &ttlSeconds, job.Spec.TTLSecondsAfterFinished)
 }

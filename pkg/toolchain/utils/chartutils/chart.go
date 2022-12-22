@@ -54,6 +54,7 @@ func (c *chart) Save() (string, error) {
 	return chartDir, nil
 }
 
+// UniqueID creates a short id from a namespace string.
 func UniqueID(namespace string) (string, error) {
 	h := sha256.New()
 	if _, err := h.Write([]byte(namespace)); err != nil {

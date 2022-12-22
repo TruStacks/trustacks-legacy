@@ -33,7 +33,7 @@ func TestAuthentikLifecycle(t *testing.T) {
 		log.Fatal(err)
 	}
 	defer PurgeBucket("authentik")
-	c := authentik.New(profile.Profile{Domain: "authentik-integration-test.local.gd", Port: 80, Insecure: true})
+	c := authentik.New(profile.Profile{Domain: "authentik-integration-test.local.gd", Port: 8081, Insecure: true})
 	if err := c.Install(dispatcher, namespace); err != nil {
 		t.Fatal(err)
 	}

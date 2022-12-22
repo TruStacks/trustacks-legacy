@@ -37,6 +37,7 @@ type ClientDispatcher struct {
 	restconfig *rest.Config
 }
 
+// CreateNamespace creates a kubernetes namespace.
 func (d *ClientDispatcher) CreateNamespace() error {
 	if _, err := d.clientset.CoreV1().Namespaces().Create(
 		context.TODO(),
@@ -48,6 +49,7 @@ func (d *ClientDispatcher) CreateNamespace() error {
 	return nil
 }
 
+// DeleteNamespace delets a kubernetes namespace.
 func (d *ClientDispatcher) DeleteNamespace() error {
 	return d.clientset.CoreV1().Namespaces().Delete(context.TODO(), d.namespace, metav1.DeleteOptions{})
 }
@@ -59,6 +61,7 @@ type InstallChartArgs struct {
 	ChartPath string
 }
 
+// chartSpec creates the helm spec to use for helm chart operations.
 func (d *ClientDispatcher) chartSpec(name string, values interface{}, timeout time.Duration, chartPath string) (*helmclient.ChartSpec, error) {
 	valuesYaml, err := yaml.Marshal(values)
 	if err != nil {
@@ -75,6 +78,7 @@ func (d *ClientDispatcher) chartSpec(name string, values interface{}, timeout ti
 	}, nil
 }
 
+// InstallChart installs a helm chart.
 func (d *ClientDispatcher) InstallChart(name string, values interface{}, timeout time.Duration, chartPath string) error {
 	chartSpec, err := d.chartSpec(name, values, timeout, chartPath)
 	if err != nil {
@@ -86,6 +90,7 @@ func (d *ClientDispatcher) InstallChart(name string, values interface{}, timeout
 	return nil
 }
 
+// UpgradeChart updates a helm chart.
 func (d *ClientDispatcher) UpgradeChart(name string, values interface{}, timeout time.Duration, chartPath string) error {
 	chartSpec, err := d.chartSpec(name, values, timeout, chartPath)
 	if err != nil {
@@ -97,6 +102,7 @@ func (d *ClientDispatcher) UpgradeChart(name string, values interface{}, timeout
 	return nil
 }
 
+// RollbackRelease rolls back a helm release.
 func (d *ClientDispatcher) RollbackRelease(name string, values interface{}, timeout time.Duration, chartPath string) error {
 	chartSpec, err := d.chartSpec(name, values, timeout, chartPath)
 	if err != nil {
@@ -108,6 +114,7 @@ func (d *ClientDispatcher) RollbackRelease(name string, values interface{}, time
 	return nil
 }
 
+// UninstallChart uninstall a helm chart.
 func (d *ClientDispatcher) UninstallChart(name string) error {
 	chartSpec := helmclient.ChartSpec{
 		ReleaseName: name,
@@ -119,10 +126,12 @@ func (d *ClientDispatcher) UninstallChart(name string) error {
 	return nil
 }
 
+// Clientset returns the client kubernetes clientset.
 func (d *ClientDispatcher) Clientset() kubernetes.Interface {
 	return d.clientset
 }
 
+// ExecCommand executes a command in kubernetes pod.
 func (d *ClientDispatcher) ExecCommand(pod, container, command, namespace string) error {
 	req := d.clientset.
 		CoreV1().
@@ -153,6 +162,8 @@ func (d *ClientDispatcher) ExecCommand(pod, container, command, namespace string
 	return nil
 }
 
+// NewDispatcher creates a client dispatcher for kubernetes and helm
+// operations.
 func NewDispatcher(namespace string) (Dispatcher, error) {
 	dispatcher := &ClientDispatcher{namespace: namespace}
 	restConfig, err := rest.InClusterConfig()
@@ -177,6 +188,8 @@ func NewDispatcher(namespace string) (Dispatcher, error) {
 	return dispatcher, nil
 }
 
+// GetNamespace returns the namespace of an in cluster kubernetes
+// client.
 func GetNamespace() (string, error) {
 	data, err := os.ReadFile(inClusterNamespace)
 	if err != nil {

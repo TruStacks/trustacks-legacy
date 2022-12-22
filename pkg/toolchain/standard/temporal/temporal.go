@@ -133,9 +133,10 @@ type valuesCassandra struct {
 }
 
 type valuesMySQL struct {
-	Enabled bool               `yaml:"enabled"`
-	Auth    valuesMySQLAuth    `yaml:"auth"`
-	Primary valuesMySQLPrimary `yaml:"primary"`
+	Enabled       bool               `yaml:"enabled"`
+	Auth          valuesMySQLAuth    `yaml:"auth"`
+	Primary       valuesMySQLPrimary `yaml:"primary"`
+	InitdbScripts map[string]string  `yaml:"initdbScripts"`
 }
 
 type valuesMySQLPrimary struct {
@@ -144,26 +145,20 @@ type valuesMySQLPrimary struct {
 	Sidecars          []valuesMySQLPrimarySidecars          `yaml:"sidecars"`
 }
 
-// valuesMySQLPrimaryExtraVolumeMounts contains volume mount
-// parameters.
 type valuesMySQLPrimaryExtraVolumeMounts struct {
 	Name      string `yaml:"name"`
 	MountPath string `yaml:"mountPath"`
 }
 
-// valuesMySQLPrimaryExtraVolumes contains empty dir volumes.
 type valuesMySQLPrimaryExtraVolumes struct {
 	Name     string                                 `yaml:"name"`
 	EmptyDir valuesMySQLPrimaryExtraVolumesEmptyDir `yaml:"emptyDir"`
 }
 
-// valuesMySQLPrimaryExtraVolumesEmptyDir contains the empty dir
-// size limit.
 type valuesMySQLPrimaryExtraVolumesEmptyDir struct {
 	SizeLimit string `yaml:"sizeLimit"`
 }
 
-// valuesMySQLPrimarySidecars contains sidecar parameters.
 type valuesMySQLPrimarySidecars struct {
 	Name         string                                   `yaml:"name"`
 	Image        string                                   `yaml:"image"`
@@ -173,26 +168,20 @@ type valuesMySQLPrimarySidecars struct {
 	VolumeMounts []valuesMySQLPrimarySidecarsVolumeMounts `yaml:"volumeMounts"`
 }
 
-// valuesMySQLPrimarySidecarsVolumeMounts contains sidecar volume mounts.
 type valuesMySQLPrimarySidecarsVolumeMounts struct {
 	Name      string `yaml:"name"`
 	MountPath string `yaml:"mountPath"`
 }
 
-// valuesMySQLPrimarySidecarsEnv contains sidecar environment variables.
 type valuesMySQLPrimarySidecarsEnv struct {
 	Name      string                                 `yaml:"name"`
 	ValueFrom valuesMySQLPrimarySidecarsEnvValueFrom `yaml:"valueFrom,omitempty"`
 }
 
-// valuesMySQLPrimarySidecarsEnvValueFrom contains environemt variable
-// secret key references.
 type valuesMySQLPrimarySidecarsEnvValueFrom struct {
 	SecretKeyRef valuesMySQLPrimarySidecarsEnvValueFromSecretKeyRef `yaml:"secretKeyRef"`
 }
 
-// valuesMySQLPrimarySidecarsEnvValueFromSecretKeyRef contains
-// the secret key reference name and key.
 type valuesMySQLPrimarySidecarsEnvValueFromSecretKeyRef struct {
 	Name string `yaml:"name"`
 	Key  string `yaml:"key"`
@@ -214,6 +203,7 @@ type valuesSchemaConfig struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// GetValues creates the helm values object.
 func (c *Temporal) GetValues(namespace string) (interface{}, error) {
 	urlScheme := "https"
 	if c.profile.Insecure {
@@ -240,7 +230,7 @@ func (c *Temporal) GetValues(namespace string) (interface{}, error) {
 					Visibility: valuesServerConfigPersistenceDriver{
 						Driver: "sql",
 						SQL: valuesServerConfigPersistenceDriverSQL{
-							Database:       "temporal",
+							Database:       "temporal_visibility",
 							User:           "temporal",
 							Host:           "temporal-mysql",
 							ExistingSecret: "temporal-mysql",
@@ -324,8 +314,6 @@ func (c *Temporal) GetValues(namespace string) (interface{}, error) {
 		MySQL: valuesMySQL{
 			Enabled: true,
 			Auth: valuesMySQLAuth{
-				CreateDatabase: true,
-				Database:       "temporal",
 				Username:       "temporal",
 				ExistingSecret: "temporal-mysql",
 			},
@@ -411,6 +399,15 @@ func (c *Temporal) GetValues(namespace string) (interface{}, error) {
 					},
 				},
 			},
+			InitdbScripts: map[string]string{
+				"setup.sh": `
+export MYSQL_PWD=$MYSQL_ROOT_PASSWORD 
+mysql -u root -e "create database temporal"
+mysql -u root -e "grant all privileges on temporal.* to 'temporal'@'%'"
+mysql -u root -e "create database temporal_visibility"
+mysql -u root -e "grant all privileges on temporal_visibility.* to 'temporal'@'%'"
+`,
+			},
 		},
 		Schema: valuesSchema{
 			Setup: valuesSchemaConfig{
@@ -452,6 +449,7 @@ func (c *Temporal) GetChart() (string, error) {
 	return path, nil
 }
 
+// Install runs pre installation tasks and install the component.
 func (c *Temporal) Install(dispatcher client.Dispatcher, namespace string) error {
 	if err := c.preInstall(dispatcher.Clientset(), namespace); err != nil {
 		return err
@@ -474,9 +472,16 @@ func (c *Temporal) Install(dispatcher client.Dispatcher, namespace string) error
 	return nil
 }
 
-// Upgrade .
+// Upgrade backs up and upgrades the component.
 func (c *Temporal) Upgrade(dispatcher client.Dispatcher, namespace string) error {
 	if err := c.backup(dispatcher, namespace); err != nil {
+		return err
+	}
+	pwd, err := getMySQLPasswordSecret(namespace, dispatcher.Clientset())
+	if err != nil {
+		return err
+	}
+	if err := createMySQLSchemaUpdateJob(namespace, pwd, dispatcher.Clientset()); err != nil {
 		return err
 	}
 	chartPath, err := c.GetChart()
@@ -494,7 +499,8 @@ func (c *Temporal) Upgrade(dispatcher client.Dispatcher, namespace string) error
 	return dispatcher.UpgradeChart("temporal", values, time.Minute*5, chartPath)
 }
 
-// Rollback.
+// Rollback deploys the previous state of the component and restores
+// the component's data.
 func (c *Temporal) Rollback(dispatcher client.Dispatcher, namespace string) error {
 	chartPath, err := c.GetChart()
 	if err != nil {
@@ -514,7 +520,7 @@ func (c *Temporal) Rollback(dispatcher client.Dispatcher, namespace string) erro
 	return c.restore(dispatcher, namespace)
 }
 
-// Uninstall .
+// Uninstall removes the component.
 func (c *Temporal) Uninstall(dispatcher client.Dispatcher, namespace string) error {
 	if err := dispatcher.UninstallChart("temporal"); err != nil {
 		return err
@@ -522,26 +528,8 @@ func (c *Temporal) Uninstall(dispatcher client.Dispatcher, namespace string) err
 	return nil
 }
 
-// backup .
-func (c *Temporal) backup(dispatcher client.Dispatcher, namespace string) error {
-	cmd := `MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysqldump -u root temporal > /tmp/backup/temporal-mysql`
-	if err := dispatcher.ExecCommand("temporal-mysql-0", "mysql", cmd, namespace); err != nil {
-		return err
-	}
-	cmd = `restic check; if [ "$?" == "1" ]; then restic init; fi; restic backup /tmp/backup/temporal-mysql`
-	return dispatcher.ExecCommand("temporal-mysql-0", "restic", cmd, namespace)
-}
-
-// restore .
-func (c *Temporal) restore(dispatcher client.Dispatcher, namespace string) error {
-	cmd := `restic restore latest --target /tmp/restore --include /tmp/backup/temporal-mysql`
-	if err := dispatcher.ExecCommand("temporal-mysql-0", "restic", cmd, namespace); err != nil {
-		return err
-	}
-	cmd = `MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysql -u root temporal < /tmp/backup/temporal-mysql`
-	return dispatcher.ExecCommand("temporal-mysql-0", "mysql", cmd, namespace)
-}
-
+// preInstall creates the oidc client and secret, the MySQL password,
+// and the MySQL scheme update job.
 func (c *Temporal) preInstall(clientset kubernetes.Interface, namespace string) error {
 	clientID, clientSecret, err := authentik.CreateOIDCClient(componentName, namespace)
 	if err != nil {
@@ -560,6 +548,34 @@ func (c *Temporal) preInstall(clientset kubernetes.Interface, namespace string) 
 	return nil
 }
 
+// backup creates a mysql database dump and writes the backup to the
+// s3 backend.
+func (c *Temporal) backup(dispatcher client.Dispatcher, namespace string) error {
+	cmd := `MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysqldump -u root temporal > /tmp/backup/temporal-mysql`
+	if err := dispatcher.ExecCommand("temporal-mysql-0", "mysql", cmd, namespace); err != nil {
+		return err
+	}
+	cmd = `restic check; if [ "$?" == "1" ]; then restic init; fi; restic backup /tmp/backup/temporal-mysql`
+	return dispatcher.ExecCommand("temporal-mysql-0", "restic", cmd, namespace)
+}
+
+// restore retrieves the s3 backup and restores the mysql database
+// backup.
+func (c *Temporal) restore(dispatcher client.Dispatcher, namespace string) error {
+	cmd := `restic restore latest --target /tmp/restore --include /tmp/backup/temporal-mysql`
+	if err := dispatcher.ExecCommand("temporal-mysql-0", "restic", cmd, namespace); err != nil {
+		return err
+	}
+	cmd = `MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysql -u root temporal < /tmp/backup/temporal-mysql`
+	return dispatcher.ExecCommand("temporal-mysql-0", "mysql", cmd, namespace)
+}
+
+// New creates a new temporal instance.
+func New(prof profile.Profile) *Temporal {
+	return &Temporal{prof}
+}
+
+// createOIDCClientSecret creates the oidc client secret secret.
 func createOIDCClientSecret(clientID, clientSecret, namespace string, clientset kubernetes.Interface) error {
 	_, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), "temporal-oidc-client", metav1.GetOptions{})
 	if err != nil {
@@ -584,6 +600,7 @@ func createOIDCClientSecret(clientID, clientSecret, namespace string, clientset 
 	return nil
 }
 
+// createMySQLPasswordSecret creates the mysql password secret.
 func createMySQLPasswordSecret(namespace string, clientset kubernetes.Interface) (string, error) {
 	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), "temporal-mysql", metav1.GetOptions{})
 	if err != nil {
@@ -618,6 +635,17 @@ func createMySQLPasswordSecret(namespace string, clientset kubernetes.Interface)
 	return string(secret.Data["password"]), nil
 }
 
+// getMySQLPasswordSecret gets password from the mysql secret.
+func getMySQLPasswordSecret(namespace string, clientset kubernetes.Interface) (string, error) {
+	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.TODO(), "temporal-mysql", metav1.GetOptions{})
+	if err != nil {
+		return "", err
+	}
+	return string(secret.Data["password"]), nil
+}
+
+// createMySQLSchemaUpdateJob creates a kubernetes job that executes
+// the mysql schema update.
 func createMySQLSchemaUpdateJob(namespace, pwd string, clientset kubernetes.Interface) error {
 	ttlSeconds := int32(0)
 	job := &batchv1.Job{
@@ -648,10 +676,6 @@ func createMySQLSchemaUpdateJob(namespace, pwd string, clientset kubernetes.Inte
 									Value: "3306",
 								},
 								{
-									Name:  "SQL_DATABASE",
-									Value: "temporal",
-								},
-								{
 									Name:  "SQL_USER",
 									Value: "temporal",
 								},
@@ -663,14 +687,18 @@ func createMySQLSchemaUpdateJob(namespace, pwd string, clientset kubernetes.Inte
 							Args: []string{
 								"-c",
 								`
-								run() {
-									temporal-sql-tool setup-schema -v 0.0
-									temporal-sql-tool update -schema-dir schema/mysql/v57/temporal/versioned
-									temporal-sql-tool setup-schema -v 0.0
-									temporal-sql-tool update -schema-dir schema/mysql/v57/visibility/versioned
-								}
-								until run; do :; done
-								`,
+while true; do
+	curl $SQL_HOST:$SQL_PORT > /dev/null
+	if [ "$?" == "1" ]; then
+		temporal-sql-tool --db temporal setup-schema -v 0.0
+		temporal-sql-tool --db temporal update-schema -d ./schema/mysql/v57/temporal/versioned
+		temporal-sql-tool --db temporal_visibility setup-schema -v 0.0
+		temporal-sql-tool --db temporal_visibility update-schema -d ./schema/mysql/v57/visibility/versioned
+		break
+	fi
+	sleep 1
+done
+`,
 							},
 						},
 					},
@@ -684,8 +712,4 @@ func createMySQLSchemaUpdateJob(namespace, pwd string, clientset kubernetes.Inte
 		return err
 	}
 	return nil
-}
-
-func New(prof profile.Profile) *Temporal {
-	return &Temporal{prof}
 }

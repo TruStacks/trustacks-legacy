@@ -159,7 +159,7 @@ type valuesEnvValueFromAuthentikBootstrapTokenSecretKeyRef struct {
 	Key  string `yaml:"key"`
 }
 
-// GetValues creates the helm values file.
+// GetValues creates the helm values object.
 func (c *Authentik) GetValues(namespace string) (interface{}, error) {
 	secretKey, err := password.Generate(32, 10, 0, false, false)
 	if err != nil {

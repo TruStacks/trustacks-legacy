@@ -16,6 +16,8 @@ type StorageConfig struct {
 	SecretAccessKey string
 }
 
+// NewStorageConfig creates a storage configuration for an external
+// s3 datastore.
 func NewStorageConfig(config StorageConfig, namespace string, clientset kubernetes.Interface) error {
 	secretName := "ts-storage-config"
 	pwd, err := password.Generate(32, 10, 0, false, false)

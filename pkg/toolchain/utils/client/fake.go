@@ -6,6 +6,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// FakeDispatcher is a fake client disptacher for use in tests.
 type FakeDispatcher struct {
 	MockCalls map[string][]interface{}
 }
