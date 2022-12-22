@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"dagger.io/dagger"
@@ -33,7 +34,12 @@ func TestNewProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	project := NewProject("test", "https://github.com/dagger/dagger", client)
+	mockSource, err := os.MkdirTemp("", "mock-source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(mockSource)
+	project := NewProject("test", mockSource, client)
 	_, err = project.Source.Entries(context.Background())
 	if err != nil {
 		t.Fatal(err)
