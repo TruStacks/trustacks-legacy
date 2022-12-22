@@ -1,26 +1,50 @@
-# See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.234.0/containers/go/.devcontainer/base.Dockerfile
-
-# [Choice] Go version (use -bullseye variants on local arm64/Apple Silicon): 1, 1.16, 1.17, 1-bullseye, 1.16-bullseye, 1.17-bullseye, 1-buster, 1.16-buster, 1.17-buster
 ARG VARIANT="1.18-bullseye"
 FROM mcr.microsoft.com/vscode/devcontainers/go:0-${VARIANT}
 
+RUN apt update && apt-get install -y \
+    ca-certificates \
+    curl \
+    gnupg \
+    libarchive-tools \
+    lsb-release
+
+# install sops.
 RUN curl -LO https://github.com/mozilla/sops/releases/download/v3.7.3/sops-v3.7.3.linux.amd64 && \
     sudo install sops-v3.7.3.linux.amd64 /usr/local/bin/sops && \
     rm -f sops-v3.7.3.linux.amd64
 
-RUN apt update && apt-get install \
-    ca-certificates \
-    curl \
-    gnupg \
-    lsb-release
-
+# install docker
 RUN sudo mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-RUN echo \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    echo \
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
     $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
     apt-get update && \
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-RUN usermod -aG docker vscode
+# install k3s
+RUN echo -e 'token: "secret"\ndebug: true' && \
+    curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true sh - && \
+    apt install fuse-overlayfs -y
+
+# configure k3s iptables
+RUN apt remove iptables nftables -y
+ENV PATH="/var/lib/rancher/k3s/data/current/bin/:/var/lib/rancher/k3s/data/current/bin/aux:$PATH"
+
+# copy k3s traefik config
+COPY traefik-config.yaml /var/lib/rancher/k3s/server/manifests/traefik-config.yaml
+
+# install kubectl & helm / kelm-s3
+RUN curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash && \
+    sudo ln -s $(which bsdtar) /usr/local/bin/tar
+ENV KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+# install okteto
+RUN curl https://get.okteto.com -sSfL | sh
+
+COPY post-start.sh /usr/local/bin/post-start
+
+USER vscode
+
+# install the helm s3 plugin
+RUN alias tar=bsdtar; helm plugin install https://github.com/hypnoglow/helm-s3.git

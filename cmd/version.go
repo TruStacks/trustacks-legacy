@@ -6,11 +6,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// current release version.
+var currentVersion string
+
 // versionCmd contains subcommands for managing factories.
 var versionCmd = &cobra.Command{
 	Use: "version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(cliVersion)
+		fmt.Println(currentVersion)
 	},
 }
 

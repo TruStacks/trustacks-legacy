@@ -4,6 +4,3 @@ tsctl
 /docs/node_modules
 /docs/build/
 /docs/.docusaurus/
-
-firestore-debug.log
-firebase-debug.log
