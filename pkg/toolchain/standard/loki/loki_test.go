@@ -2,12 +2,17 @@ package loki
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/trustacks/trustacks/pkg/toolchain/standard/authentik"
 	"github.com/trustacks/trustacks/pkg/toolchain/standard/profile"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/backend"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/backend/storagetest"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/client"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +36,20 @@ func TestGetChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// check that the chart version matches
+	fd, err := os.Open(fmt.Sprintf("%s/Chart.yaml", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chartYaml := map[string]interface{}{}
+	if err := yaml.Unmarshal(data, &chartYaml); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, chartVersion, chartYaml["version"].(string))
 	assert.Equal(t, "loki.tgz", charts[0].Name())
 }
 
@@ -260,4 +279,51 @@ func TestCreateOIDCClientSecret(t *testing.T) {
 	}
 	assert.Equal(t, "client-id", string(secret.Data["client-id"]))
 	assert.Equal(t, "client-secret", string(secret.Data["client-secret"]))
+}
+
+func TestLokiLifecycleIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	t.Parallel()
+	namespace := "loki-integration-test"
+	dispatcher, err := client.NewDispatcher(namespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.CreateNamespace(); err != nil {
+		t.Fatal(err)
+	}
+	storageConfig, err := storagetest.NewTestStorageConfig("loki")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.NewStorageConfig(storageConfig, namespace, dispatcher.Clientset()); err != nil {
+		t.Fatal(err)
+	}
+	defer storagetest.PurgeBucket("loki")
+	pfl := profile.Profile{Domain: "loki-integration-test.local.gd", Port: 8081, Insecure: true}
+	sso := authentik.New(pfl)
+	if err := sso.Install(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	c := New(pfl)
+	if err := c.Install(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Upgrade(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Rollback(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Uninstall(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := sso.Uninstall(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.DeleteNamespace(); err != nil {
+		t.Fatal(err)
+	}
 }

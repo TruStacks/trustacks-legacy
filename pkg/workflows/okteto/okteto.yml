@@ -1,0 +1,21 @@
+deploy:
+- kubectl apply -f base.yml -n $NAMESPACE
+destroy:
+- kubectl delete -f base.yml -n $NAMESPACE
+dev:
+  worker:
+    autocreate: true
+    image: okteto/golang:1
+    command: bash
+    serviceAccount: ts-temporal-worker
+    securityContext:
+      capabilities:
+        add:
+        - SYS_PTRACE
+    workdir: /usr/src/app
+    volumes:
+    - /go/pkg/
+    - /root/.cache/go-build/
+    sync:
+    - ../../../:/usr/src/app
+namespace: $NAMESPACE

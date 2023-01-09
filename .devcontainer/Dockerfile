@@ -13,15 +13,6 @@ RUN curl -LO https://github.com/mozilla/sops/releases/download/v3.7.3/sops-v3.7.
     sudo install sops-v3.7.3.linux.amd64 /usr/local/bin/sops && \
     rm -f sops-v3.7.3.linux.amd64
 
-# install docker
-RUN sudo mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
-    echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-    $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null && \
-    apt-get update && \
-    apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
 # install k3s
 RUN echo -e 'token: "secret"\ndebug: true' && \
     curl -sfL https://get.k3s.io | INSTALL_K3S_SKIP_ENABLE=true sh - && \

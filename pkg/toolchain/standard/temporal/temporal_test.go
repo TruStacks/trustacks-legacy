@@ -3,14 +3,19 @@ package temporal
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/trustacks/trustacks/pkg/toolchain/standard/authentik"
 	"github.com/trustacks/trustacks/pkg/toolchain/standard/profile"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/backend"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/backend/storagetest"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/chartutils"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/client"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -33,6 +38,20 @@ func TestGetChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// check that the chart version matches
+	fd, err := os.Open(fmt.Sprintf("%s/Chart.yaml", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chartYaml := map[string]interface{}{}
+	if err := yaml.Unmarshal(data, &chartYaml); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, chartVersion, chartYaml["version"].(string))
 	assert.Equal(t, "temporal.tgz", charts[0].Name())
 }
 
@@ -284,4 +303,51 @@ done
 		job.Spec.Template.Spec.Containers[0].Args[1])
 	assert.Equal(t, corev1.RestartPolicyOnFailure, job.Spec.Template.Spec.RestartPolicy)
 	assert.Equal(t, &ttlSeconds, job.Spec.TTLSecondsAfterFinished)
+}
+
+func TestTemporalLifecycleIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	t.Parallel()
+	namespace := "temporal-integration-test"
+	dispatcher, err := client.NewDispatcher(namespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.CreateNamespace(); err != nil {
+		t.Fatal(err)
+	}
+	storageConfig, err := storagetest.NewTestStorageConfig("temporal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.NewStorageConfig(storageConfig, namespace, dispatcher.Clientset()); err != nil {
+		t.Fatal(err)
+	}
+	defer storagetest.PurgeBucket("temporal")
+	pfl := profile.Profile{Domain: "temporal-integration-test.local.gd", Port: 8081, Insecure: true}
+	sso := authentik.New(pfl)
+	if err := sso.Install(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	c := New(pfl)
+	if err := c.Install(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Upgrade(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Rollback(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Uninstall(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := sso.Uninstall(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.DeleteNamespace(); err != nil {
+		t.Fatal(err)
+	}
 }

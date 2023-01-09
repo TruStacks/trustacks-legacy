@@ -27,8 +27,12 @@ const (
 	temporalVersion = "1.19.0"
 )
 
-//go:embed temporal-0.19.0.tgz
-var chartArchive []byte
+var (
+	// the version of the helm chart.
+	chartVersion = "0.19.0"
+	//go:embed temporal-*.tgz
+	chartArchive []byte
+)
 
 type Temporal struct {
 	profile profile.Profile
@@ -442,7 +446,7 @@ func (c *Temporal) GetChart() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path, err := chart.Save()
+	path, err := chart.Save(chartVersion)
 	if err != nil {
 		return "", err
 	}

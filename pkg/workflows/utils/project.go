@@ -17,6 +17,7 @@ type Project struct {
 	caches   map[string]*dagger.CacheVolume
 }
 
+// CreateCache .
 func (p *Project) CreateCache(path string, client *dagger.Client) (string, *dagger.CacheVolume) {
 	if _, exists := p.caches[path]; !exists {
 		p.caches[path] = client.CacheVolume(p.Name + time.Now().Format(time.RFC3339))
@@ -24,6 +25,7 @@ func (p *Project) CreateCache(path string, client *dagger.Client) (string, *dagg
 	return path, p.caches[path]
 }
 
+// NewProject .
 func NewProject(name, path string, client *dagger.Client) *Project {
 	return &Project{
 		Name:   name,
@@ -32,6 +34,7 @@ func NewProject(name, path string, client *dagger.Client) *Project {
 	}
 }
 
+// CloneSource .
 func CloneSource(repo, path string) (string, error) {
 	r, err := git.PlainClone(path, false, &git.CloneOptions{
 		URL:           repo,

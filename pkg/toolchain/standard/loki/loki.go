@@ -24,8 +24,12 @@ const (
 	componentName = "loki"
 )
 
-//go:embed loki-3.6.1.tgz
-var chartArchive []byte
+var (
+	// chartVersion is the version of the helm chart.
+	chartVersion = "3.6.1"
+	//go:embed loki-*.tgz
+	chartArchive []byte
+)
 
 type Loki struct {
 	profile profile.Profile
@@ -184,10 +188,12 @@ type valuesGrafanaDatasourcesYaml struct {
 }
 
 type valuesGrafanaDatasourcesYamlDatasources struct {
-	Name   string `yaml:"name"`
-	Type   string `yaml:"type"`
-	Access string `yaml:"access"`
-	URL    string `yaml:"url"`
+	Name           string                 `yaml:"name"`
+	Type           string                 `yaml:"type"`
+	Access         string                 `yaml:"access"`
+	URL            string                 `yaml:"url"`
+	JsonData       map[string]interface{} `yaml:"jsonData"`
+	SecureJsonData map[string]interface{} `yaml:"secureJsonData"`
 }
 
 // GetValues creates the helm values object.
@@ -344,8 +350,16 @@ func (c *Loki) GetValues(namespace string) (interface{}, error) {
 						{
 							Name:   "Loki",
 							Type:   "loki",
-							Access: "direct",
+							Access: "proxy",
 							URL:    "http://loki:3100",
+							JsonData: map[string]interface{}{
+								"httpHeaderName1": "Connection",
+								"httpHeaderName2": "Upgrade",
+							},
+							SecureJsonData: map[string]interface{}{
+								"httpHeaderValue1": "Upgrade",
+								"httpHeaderValue2": "websocket",
+							},
 						},
 					},
 				},
@@ -406,7 +420,7 @@ func (c *Loki) GetChart() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path, err := chart.Save()
+	path, err := chart.Save(chartVersion)
 	if err != nil {
 		return "", err
 	}

@@ -11,6 +11,9 @@ import (
 )
 
 func TestSync(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping")
+	}
 	previousDataDir := dataDir
 	dataDir = os.TempDir()
 	defer func() {

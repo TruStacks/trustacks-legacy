@@ -11,7 +11,8 @@ var currentVersion string
 
 // versionCmd contains subcommands for managing factories.
 var versionCmd = &cobra.Command{
-	Use: "version",
+	Use:   "version",
+	Short: "show the cli version",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println(currentVersion)
 	},

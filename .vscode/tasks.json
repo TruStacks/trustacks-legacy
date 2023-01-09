@@ -5,6 +5,11 @@
       "label": "Start k3s",
       "type": "shell",
       "command": "cd /tmp && sudo k3s server --flannel-backend none --write-kubeconfig-mode 644",
+    },
+    {
+      "label": "Start TruStacks API",
+      "type": "shell",
+      "command": "STORAGE_URL=$storage_url STORAGE_ACCESS_KEY_ID=$storage_access_key_id STORAGE_SECRET_ACCESS_KEY go run ./cmd"
     }
   ]
 }

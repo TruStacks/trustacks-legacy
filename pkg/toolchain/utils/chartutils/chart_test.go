@@ -10,7 +10,7 @@ func TestNewChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Save(); err != nil {
+	if _, err := c.Save("0.1.0"); err != nil {
 		t.Fatal(err)
 	}
 }

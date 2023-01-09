@@ -2,33 +2,77 @@ package utils
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"dagger.io/dagger"
 )
 
+const artifactsRoot = "/tmp/artifacts"
+
 type Action struct {
-	Image string
-	Run   []string
+	Image     string
+	Script    RunCmd
+	Artifacts map[string]string
 }
+
+type RunCmd func(container *dagger.Container) (*dagger.Container, error)
 
 type RunOpts struct {
 	Caches []string
 }
 
-func (action *Action) Exec(client *dagger.Client, project *Project, opts *RunOpts) (*dagger.Container, error) {
-	container := client.Container().From(action.Image)
-	for _, path := range opts.Caches {
-		container = container.WithMountedCache(project.CreateCache(path, client))
+// Exec configure caches, artifacts, and sources and runs the task.
+func (a *Action) Exec(name string, client *dagger.Client, project *Project, opts *RunOpts) (*dagger.Container, error) {
+	artifactsPath := fmt.Sprintf("%s/%s", artifactsRoot, name)
+	container := client.Container().From(a.Image)
+	if opts != nil {
+		for _, path := range opts.Caches {
+			container = container.WithMountedCache(project.CreateCache(path, client))
+		}
 	}
 	container = container.WithMountedDirectory("/src", project.Source).WithWorkdir("/src")
-	container = container.Exec(dagger.ContainerExecOpts{Args: []string{"mkdir", "-p", "/artifacts"}})
-	container = container.Exec(dagger.ContainerExecOpts{Args: []string{"/bin/sh", "-c", strings.Join(action.Run, "; ")}})
-
-	_, err := container.Directory("/artifacts").Export(context.Background(), "artifacts/")
+	container = container.WithExec([]string{"mkdir", "-p", artifactsPath})
+	container, err := a.Script(container)
 	if err != nil {
-		return nil, err
+		fmt.Println(err)
 	}
+	_, exportErr := container.Directory(artifactsRoot).Export(context.Background(), "artifacts/")
+	fmt.Println(exportErr)
+	if exportErr != nil {
+		return nil, exportErr
+	}
+	return container, err
+}
 
+// ArtifactPath returns the filesystem path for the provided
+// artifact.
+func ArtifactPath(name, artifact string) string {
+	return fmt.Sprintf("/tmp/artifacts/%s/%s", name, artifact)
+}
+
+// WithTrapExec runs the command with error trapping to prevent
+// failure from bricking the dagger container.
+func WithTrapExec(container *dagger.Container, cmd []string) (*dagger.Container, error) {
+	container = container.WithExec(
+		[]string{"/bin/sh", "-c", fmt.Sprintf("%s > /tmp/stderr 2>&1 || echo $? > /tmp/code", strings.Join(cmd, " "))},
+	)
+	ctx := context.Background()
+	code, err := container.File("/tmp/code").Contents(ctx)
+	if err != nil {
+		// if the command succeeds /tmp/code will not be created
+		if strings.Contains(err.Error(), "no such file or directory") {
+			return container, nil
+		}
+		return container, err
+	}
+	if code != "0" {
+		stderr, err := container.File("/tmp/stderr").Contents(ctx)
+		if err != nil {
+			return container, err
+		}
+		return container, errors.New(stderr)
+	}
 	return container, nil
 }
