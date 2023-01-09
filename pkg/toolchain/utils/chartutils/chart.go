@@ -27,8 +27,8 @@ type chart struct {
 	subchart []byte
 }
 
-// Save write the helm chart to the temporary dir.
-func (c *chart) Save() (string, error) {
+// Save writes the helm chart to the temporary dir.
+func (c *chart) Save(version string) (string, error) {
 	chartDir, err := os.MkdirTemp("", fmt.Sprintf("%s-chart-", c.name))
 	if err != nil {
 		return "", err
@@ -36,7 +36,7 @@ func (c *chart) Save() (string, error) {
 	yamlData, err := yaml.Marshal(chartYAML{
 		ApiVersion:   "v1",
 		Name:         c.name,
-		Version:      "0.0.0",
+		Version:      version,
 		Dependencies: []map[string]interface{}{{"name": c.name}},
 	})
 	if err != nil {
@@ -60,7 +60,7 @@ func UniqueID(namespace string) (string, error) {
 	if _, err := h.Write([]byte(namespace)); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s", hex.EncodeToString(h.Sum(nil))[:7]), nil
+	return hex.EncodeToString(h.Sum(nil))[:7], nil
 }
 
 // NewChart creates a new chart instance.

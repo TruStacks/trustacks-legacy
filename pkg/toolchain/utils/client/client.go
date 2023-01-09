@@ -63,19 +63,22 @@ type InstallChartArgs struct {
 
 // chartSpec creates the helm spec to use for helm chart operations.
 func (d *ClientDispatcher) chartSpec(name string, values interface{}, timeout time.Duration, chartPath string) (*helmclient.ChartSpec, error) {
-	valuesYaml, err := yaml.Marshal(values)
-	if err != nil {
-		return nil, err
-	}
-	return &helmclient.ChartSpec{
+	spec := &helmclient.ChartSpec{
 		ReleaseName: name,
 		Namespace:   d.namespace,
 		ChartName:   chartPath,
 		Timeout:     timeout,
-		ValuesYaml:  string(valuesYaml),
 		Atomic:      true,
 		Wait:        true,
-	}, nil
+	}
+	if values != nil {
+		valuesYaml, err := yaml.Marshal(values)
+		if err != nil {
+			return nil, err
+		}
+		spec.ValuesYaml = string(valuesYaml)
+	}
+	return spec, nil
 }
 
 // InstallChart installs a helm chart.

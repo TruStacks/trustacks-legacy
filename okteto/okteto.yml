@@ -1,0 +1,25 @@
+deploy:
+- kubectl apply -f controller.yml
+- helm repo add minio https://charts.bitnami.com/bitnami
+- helm upgrade --install minio -n integration-test-utils -f minio-values.yaml minio/minio
+destroy:
+- helm delete minio -n integration-test-utils
+- kubectl delete -f controller.yml
+dev:
+  controller:
+    autocreate: true
+    image: okteto/golang:1
+    command: bash
+    forward:
+    - 8888:8080
+    serviceAccount: trustacks-controller
+    securityContext:
+      capabilities:
+        add:
+        - SYS_PTRACE
+    workdir: /usr/src/app
+    volumes:
+    - /go/pkg/
+    - /root/.cache/go-build/
+    sync:
+    - ../:/usr/src/app
