@@ -3,6 +3,7 @@ package authentik
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/trustacks/trustacks/pkg/toolchain/standard/profile"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/backend"
+	"github.com/trustacks/trustacks/pkg/toolchain/utils/backend/storagetest"
 	"github.com/trustacks/trustacks/pkg/toolchain/utils/client"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -37,6 +41,20 @@ func TestGetChart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// check that the chart version matches
+	fd, err := os.Open(fmt.Sprintf("%s/Chart.yaml", path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := io.ReadAll(fd)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chartYaml := map[string]interface{}{}
+	if err := yaml.Unmarshal(data, &chartYaml); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, chartVersion, chartYaml["version"].(string))
 	assert.Equal(t, "authentik.tgz", charts[0].Name())
 }
 
@@ -395,6 +413,45 @@ func TestHealthCheckService(t *testing.T) {
 	// test the health check with a valid URL.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	if err := healthCheckService(ts.URL, 1, context.TODO()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAuthentikLifecycleIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+	t.Parallel()
+	namespace := "authentik-integration-test"
+	dispatcher, err := client.NewDispatcher(namespace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.CreateNamespace(); err != nil {
+		t.Fatal(err)
+	}
+	storageConfig, err := storagetest.NewTestStorageConfig("authentik")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.NewStorageConfig(storageConfig, namespace, dispatcher.Clientset()); err != nil {
+		t.Fatal(err)
+	}
+	defer storagetest.PurgeBucket("authentik")
+	c := New(profile.Profile{Domain: "authentik-integration-test.local.gd", Port: 8081, Insecure: true})
+	if err := c.Install(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Upgrade(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Rollback(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Uninstall(dispatcher, namespace); err != nil {
+		t.Fatal(err)
+	}
+	if err := dispatcher.DeleteNamespace(); err != nil {
 		t.Fatal(err)
 	}
 }

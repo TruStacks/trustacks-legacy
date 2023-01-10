@@ -7,15 +7,15 @@
 	"dockerComposeFile": "docker-compose.yml",
 	"service": "devcontainer",
 	"runServices": [
-			"buildkitd",
-			"postgresql",
-			"temporal",
-			"temporal-admin-tools",
-			"temporal-ui",
-			"loki",
-			"promtail",
-			"grafana",
-			"minio"
+			// "buildkitd",
+			// "postgresql",
+			// "temporal",
+			// "temporal-admin-tools",
+			// "temporal-ui",
+			// "loki",
+			// "promtail",
+			// "grafana",
+			// "minio"
 	],
 	"workspaceFolder": "/workspace",
 	"shutdownAction": "none",
@@ -29,8 +29,7 @@
 				"vs-kubernetes": {
 					"vscode-kubernetes.kubectl-path.linux": "/usr/local/bin/kubectl",
 					"vscode-kubernetes.helm-path.linux": "/usr/local/bin/helm"
-				},
-				"go.buildFlags": ["-tags=integration"]
+				}
 			},
 			"extensions": [
 				"inercia.vscode-k3d",

@@ -30,8 +30,12 @@ const (
 	serviceURL = "http://authentik"
 )
 
-//go:embed authentik-2022.11.0.tgz
-var chartArchive []byte
+var (
+	// chartVersion is the version of the helm chart.
+	chartVersion = "2022.11.0"
+	//go:embed authentik-*.tgz
+	chartArchive []byte
+)
 
 type Authentik struct {
 	profile profile.Profile
@@ -316,7 +320,7 @@ func (c *Authentik) GetChart() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path, err := chart.Save()
+	path, err := chart.Save(chartVersion)
 	if err != nil {
 		return "", err
 	}

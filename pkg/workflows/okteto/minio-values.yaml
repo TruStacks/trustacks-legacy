@@ -1,0 +1,4 @@
+mode: standalone
+auth:
+  rootUser: root
+  rootPassword: rootpass123
